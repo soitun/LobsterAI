@@ -225,6 +225,10 @@ export interface AppConfig {
     settings: string;
     [key: string]: string | undefined;
   };
+  // 服务器配置（后端代理 API 基础 URL）
+  server?: {
+    baseUrl: string;
+  };
 }
 
 // 默认配置
@@ -411,7 +415,10 @@ export const defaultConfig: AppConfig = {
     newChat: 'Ctrl+N',
     search: 'Ctrl+F',
     settings: 'Ctrl+,',
-  }
+  },
+  server: {
+    baseUrl: 'https://api.lobsterai.com',
+  },
 };
 
 // 配置存储键
