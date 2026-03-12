@@ -12,6 +12,7 @@ import {
   BrowserWindow,
   desktopCapturer,
   screen,
+  session,
   app,
   systemPreferences,
 } from 'electron';
@@ -46,8 +47,6 @@ interface OverlaySelectionResult {
 // ---------------------------------------------------------------------------
 
 const SCREENSHOT_DIR_NAME = 'screenshots';
-const HIDE_WINDOW_DELAY_MS = 400;
-const OVERLAY_JPEG_QUALITY = 80;
 
 let captureInProgress = false;
 
@@ -190,6 +189,7 @@ function showOverlaysOnAllDisplays(
       for (const w of windows) {
         if (!w.isDestroyed()) w.showInactive();
       }
+      console.log(`[Screenshot] all ${windows.length} overlays shown`);
       // Then focus the overlay on the display where the app lives,
       // so the user can immediately start drawing there.
       const activeWin = windows[activeDisplayIndex];
@@ -208,12 +208,8 @@ function showOverlaysOnAllDisplays(
         width,
         height,
         frame: false,
-        // No kiosk/fullscreen on any platform:
-        //   macOS: conflicts with Spaces across multiple displays.
-        //   Windows: kiosk forces all windows to the primary display.
-        // Instead: frameless + alwaysOnTop + correct bounds per display.
-        // On Windows, overlayBounds = workArea (excludes taskbar).
-        // On macOS, overlayBounds = bounds (full screen).
+        transparent: true,
+        type: isMac ? 'panel' : 'toolbar',
         skipTaskbar: true,
         resizable: false,
         movable: false,
@@ -222,12 +218,22 @@ function showOverlaysOnAllDisplays(
         hasShadow: false,
         enableLargerThanScreen: isMac,
         show: false,
+        paintWhenInitiallyHidden: false,
+        backgroundColor: '#00000000',
+        focusable: true,
+        titleBarStyle: 'hidden',
+        fullscreen: false,
+        fullscreenable: false,
+        acceptFirstMouse: true,
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
           sandbox: true,
+          session: session.fromPartition('screenshot-overlay'),
         },
       });
+
+      console.log(`[Screenshot] overlay[${i}] created: bounds=(${x},${y},${width},${height}), type=${isMac ? 'panel' : 'toolbar'}, transparent=true, session=screenshot-overlay`);
 
       win.setAlwaysOnTop(true, 'screen-saver');
       if (isMac) {
@@ -247,6 +253,7 @@ function showOverlaysOnAllDisplays(
         if (settled) return;
         try {
           const parsed = JSON.parse(title) as OverlaySelectionResult;
+          console.log(`[Screenshot] overlay[${displayIndex}] selection result: confirmed=${parsed.confirmed}, rect=${JSON.stringify(parsed.rect)}`);
           closeAll({ ...parsed, displayIndex });
         } catch { /* ignore non-JSON */ }
       });
@@ -308,10 +315,16 @@ export async function captureScreenshot(
       }
     }
 
-    // 1. Hide main window if requested
+    // 1. Hide main window if requested — wait for the 'hide' event instead of
+    //    a fixed timer so we proceed as soon as the window is actually hidden.
     if (hideWindow && mainWindow && mainWindow.isVisible()) {
-      mainWindow.hide();
-      await sleep(HIDE_WINDOW_DELAY_MS);
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => resolve(), 500); // safety fallback
+        mainWindow!.once('hide', () => { clearTimeout(timeout); resolve(); });
+        mainWindow!.hide();
+      });
+      // Small buffer for the OS compositor to finish removing the window pixels
+      await sleep(50);
     }
 
     // 2. Prepare output path
@@ -334,58 +347,38 @@ export async function captureScreenshot(
       const img = images[i];
       if (img && !img.isEmpty()) {
         const sz = img.getSize();
-        // Save a small debug JPEG to verify the capture is not all-black
-        const debugJpeg = img.resize({ width: Math.round(sz.width / 4), height: Math.round(sz.height / 4) }).toJPEG(50);
-        console.log(`[Screenshot] display[${i}] image: ${sz.width}x${sz.height}, debugJpeg=${debugJpeg.length} bytes`);
-        try {
-          const debugPath = path.join(app.getPath('temp'), `lobsterai-debug-${i}.jpg`);
-          fs.writeFileSync(debugPath, debugJpeg);
-          console.log(`[Screenshot] debug image saved: ${debugPath}`);
-        } catch { /* ignore */ }
+        console.log(`[Screenshot] display[${i}] image: ${sz.width}x${sz.height}`);
       } else {
         console.warn(`[Screenshot] display[${i}] image: null or empty`);
       }
     }
 
     // 4. Compute overlay bounds per display.
-    //    Windows: use workArea (excludes taskbar) — avoids taskbar coverage issues
-    //             and kiosk mode that forces all windows to the primary display.
-    //    macOS:   use full bounds (overlay covers entire screen including menu bar).
+    //    Use full screen bounds on all platforms so the overlay covers the entire
+    //    screen including the Windows taskbar and the macOS menu bar.
     const isWindows = process.platform === 'win32';
-    const overlayBounds: Electron.Rectangle[] = displays.map((d) =>
-      isWindows ? d.workArea : d.bounds,
-    );
+    const overlayBounds: Electron.Rectangle[] = displays.map((d) => d.bounds);
 
-    // 5. Downscale each display to a JPEG data URL for overlay background.
-    //    Use logical resolution (not Retina physical) to keep data size manageable.
-    //    On Windows, crop to workArea portion so background matches the overlay exactly.
+    // 5. Convert each display capture to a PNG data URL for overlay background.
+    //    PNG is lossless and actually smaller than high-quality JPEG for UI screenshots.
+    //    Cap at 2x logical resolution: sharp enough for Retina, avoids 4K+ overhead.
     const bgUrls: string[] = displays.map((d, i) => {
       const img = images[i];
       if (!img || img.isEmpty()) {
         return 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=';
       }
-      const { width: lw, height: lh } = d.size; // logical bounds size
-      console.log(`[Screenshot] bgUrl[${i}] resize to ${lw}x${lh}, overlay bounds=${JSON.stringify(overlayBounds[i])}`);
-      const resized = img.resize({ width: lw, height: lh });
+      const imgSize = img.getSize();
+      // Cap background at 2x logical resolution for performance
+      const maxW = d.size.width * 2;
+      const maxH = d.size.height * 2;
+      const needsDownscale = imgSize.width > maxW || imgSize.height > maxH;
+      const bgImg = needsDownscale ? img.resize({ width: maxW, height: maxH }) : img;
+      const bgSize = bgImg.getSize();
+      console.log(`[Screenshot] bgUrl[${i}] original=${imgSize.width}x${imgSize.height}, bg=${bgSize.width}x${bgSize.height}${needsDownscale ? ' (capped at 2x)' : ''}, overlay bounds=${JSON.stringify(overlayBounds[i])}`);
 
-      if (isWindows) {
-        // Crop out the taskbar region — keep only the workArea portion
-        const ob = overlayBounds[i];
-        const b = d.bounds;
-        const waCropped = resized.crop({
-          x: ob.x - b.x,
-          y: ob.y - b.y,
-          width: ob.width,
-          height: ob.height,
-        });
-        const jpegBuf = waCropped.toJPEG(OVERLAY_JPEG_QUALITY);
-        console.log(`[Screenshot] bgUrl[${i}] JPEG bytes: ${jpegBuf.length}, cropped to ${ob.width}x${ob.height}`);
-        return `data:image/jpeg;base64,${jpegBuf.toString('base64')}`;
-      }
-
-      const jpegUrl = `data:image/jpeg;base64,${resized.toJPEG(OVERLAY_JPEG_QUALITY).toString('base64')}`;
-      console.log(`[Screenshot] bgUrl[${i}] length: ${jpegUrl.length}`);
-      return jpegUrl;
+      const pngBuf = bgImg.toPNG();
+      console.log(`[Screenshot] bgUrl[${i}] PNG bytes: ${pngBuf.length}`);
+      return `data:image/png;base64,${pngBuf.toString('base64')}`;
     });
 
     // 6. Determine which display the main window is on
@@ -400,7 +393,7 @@ export async function captureScreenshot(
     const result = await showOverlaysOnAllDisplays(displays, bgUrls, activeDisplayIndex, overlayBounds);
 
     // 8. Restore main window
-    if (hideWindow && mainWindow) {
+    if (hideWindow && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();
       mainWindow.focus();
     }
@@ -434,19 +427,13 @@ export async function captureScreenshot(
     const scaleY = imgSize.height / ob.height;
     console.log(`[Screenshot] crop: imgSize=${imgSize.width}x${imgSize.height}, overlayBounds=${ob.width}x${ob.height}, scale=${scaleX.toFixed(3)}x${scaleY.toFixed(3)}`);
 
-    let cssX = rx;
-    let cssY = ry;
-    if (isWindows) {
-      // On Windows, overlay covers workArea; offset to full capture image coordinates
-      const d = displays[result.displayIndex];
-      cssX += d.workArea.x - d.bounds.x;
-      cssY += d.workArea.y - d.bounds.y;
-    }
-    const finalX = Math.round(cssX * scaleX);
-    const finalY = Math.round(cssY * scaleY);
+    // Overlay now covers full screen bounds on all platforms,
+    // so CSS coordinates map directly to capture image coordinates.
+    const finalX = Math.round(rx * scaleX);
+    const finalY = Math.round(ry * scaleY);
     const finalW = Math.round(rw * scaleX);
     const finalH = Math.round(rh * scaleY);
-    console.log(`[Screenshot] crop: css=(${cssX},${cssY},${rw},${rh}) -> final=(${finalX},${finalY},${finalW},${finalH})`);
+    console.log(`[Screenshot] crop: css=(${rx},${ry},${rw},${rh}) -> final=(${finalX},${finalY},${finalW},${finalH})`);
     const cropped = fullImg.crop({ x: finalX, y: finalY, width: finalW, height: finalH });
     const pngBuf = cropped.toPNG();
     fs.writeFileSync(filePath, pngBuf);
@@ -454,7 +441,7 @@ export async function captureScreenshot(
     const dataUrl = `data:image/png;base64,${pngBuf.toString('base64')}`;
     return { success: true, filePath, dataUrl, fileName };
   } catch (error) {
-    if (hideWindow && mainWindow && !mainWindow.isVisible()) {
+    if (hideWindow && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       try { mainWindow.show(); mainWindow.focus(); } catch { /* ignore */ }
     }
     return {
@@ -485,8 +472,8 @@ function buildOverlayHtml(bgDataUrl: string): string {
 <html><head><meta charset="UTF-8"><title></title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#000;user-select:none;-webkit-user-select:none;cursor:crosshair}
-canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+html,body{width:100%;height:100%;overflow:hidden;background:transparent;user-select:none;-webkit-user-select:none;cursor:crosshair}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%;image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges}
 .tb{position:absolute;display:none;gap:4px;z-index:10}
 .tb button{width:32px;height:32px;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .tb button svg{width:18px;height:18px}
@@ -509,6 +496,7 @@ canvas{position:absolute;top:0;left:0;width:100%;height:100%}
 <div class="hd ww" id="h6"></div><div class="hd ee" id="h7"></div>
 <script>
 (function(){
+console.log('[overlay] script executing, userAgent='+navigator.userAgent);
 var C=document.getElementById('c'),X=C.getContext('2d'),
     T=document.getElementById('tb'),S=document.getElementById('sl'),
     BK=document.getElementById('bk'),BC=document.getElementById('bc');
