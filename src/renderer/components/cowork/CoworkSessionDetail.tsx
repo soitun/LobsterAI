@@ -1177,6 +1177,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   const currentSession = useSelector((state: RootState) => state.cowork.currentSession);
   const isStreaming = useSelector((state: RootState) => state.cowork.isStreaming);
   const skills = useSelector((state: RootState) => state.skill.skills);
+  const workingDirectory = useSelector((state: RootState) => state.cowork.config.workingDirectory);
   const detailRootRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -2002,6 +2003,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
             onManageSkills={onManageSkills}
             size="large"
             showModelSelector={true}
+            workingDirectory={workingDirectory}
           />
         </div>
       </div>
