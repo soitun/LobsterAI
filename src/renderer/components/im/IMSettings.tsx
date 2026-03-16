@@ -431,57 +431,72 @@ const IMSettings: React.FC = () => {
       // All OpenClaw platforms: im:config:set handler already calls
       // syncOpenClawConfig({ restartGatewayIfRunning: true }), so no startGateway/stopGateway needed.
       // Only updateConfig + loadStatus is required.
+      // Pessimistic UI update: wait for IPC to complete before updating Redux state.
+      // This prevents UI/backend state divergence when rapidly toggling, since the
+      // backend debounces syncOpenClawConfig calls with a 600ms window.
       if (platform === 'telegram') {
         const newEnabled = !tgOpenClawConfig.enabled;
-        dispatch(setTelegramOpenClawConfig({ enabled: newEnabled }));
-        if (newEnabled) dispatch(clearError());
-        await imService.updateConfig({ telegram: { ...tgOpenClawConfig, enabled: newEnabled } });
-        await imService.loadStatus();
+        const success = await imService.updateConfig({ telegram: { ...tgOpenClawConfig, enabled: newEnabled } });
+        if (success) {
+          dispatch(setTelegramOpenClawConfig({ enabled: newEnabled }));
+          if (newEnabled) dispatch(clearError());
+          await imService.loadStatus();
+        }
         return;
       }
 
       if (platform === 'dingtalk') {
         const newEnabled = !dtOpenClawConfig.enabled;
-        dispatch(setDingTalkConfig({ enabled: newEnabled }));
-        if (newEnabled) dispatch(clearError());
-        await imService.updateConfig({ dingtalk: { ...dtOpenClawConfig, enabled: newEnabled } });
-        await imService.loadStatus();
+        const success = await imService.updateConfig({ dingtalk: { ...dtOpenClawConfig, enabled: newEnabled } });
+        if (success) {
+          dispatch(setDingTalkConfig({ enabled: newEnabled }));
+          if (newEnabled) dispatch(clearError());
+          await imService.loadStatus();
+        }
         return;
       }
 
       if (platform === 'feishu') {
         const newEnabled = !fsOpenClawConfig.enabled;
-        dispatch(setFeishuConfig({ enabled: newEnabled }));
-        if (newEnabled) dispatch(clearError());
-        await imService.updateConfig({ feishu: { ...fsOpenClawConfig, enabled: newEnabled } });
-        await imService.loadStatus();
+        const success = await imService.updateConfig({ feishu: { ...fsOpenClawConfig, enabled: newEnabled } });
+        if (success) {
+          dispatch(setFeishuConfig({ enabled: newEnabled }));
+          if (newEnabled) dispatch(clearError());
+          await imService.loadStatus();
+        }
         return;
       }
 
       if (platform === 'discord') {
         const newEnabled = !dcOpenClawConfig.enabled;
-        dispatch(setDiscordConfig({ enabled: newEnabled }));
-        if (newEnabled) dispatch(clearError());
-        await imService.updateConfig({ discord: { ...dcOpenClawConfig, enabled: newEnabled } });
-        await imService.loadStatus();
+        const success = await imService.updateConfig({ discord: { ...dcOpenClawConfig, enabled: newEnabled } });
+        if (success) {
+          dispatch(setDiscordConfig({ enabled: newEnabled }));
+          if (newEnabled) dispatch(clearError());
+          await imService.loadStatus();
+        }
         return;
       }
 
       if (platform === 'qq') {
         const newEnabled = !qqOpenClawConfig.enabled;
-        dispatch(setQQConfig({ enabled: newEnabled }));
-        if (newEnabled) dispatch(clearError());
-        await imService.updateConfig({ qq: { ...qqOpenClawConfig, enabled: newEnabled } });
-        await imService.loadStatus();
+        const success = await imService.updateConfig({ qq: { ...qqOpenClawConfig, enabled: newEnabled } });
+        if (success) {
+          dispatch(setQQConfig({ enabled: newEnabled }));
+          if (newEnabled) dispatch(clearError());
+          await imService.loadStatus();
+        }
         return;
       }
 
       if (platform === 'wecom') {
         const newEnabled = !wecomOpenClawConfig.enabled;
-        dispatch(setWecomConfig({ enabled: newEnabled }));
-        if (newEnabled) dispatch(clearError());
-        await imService.updateConfig({ wecom: { ...wecomOpenClawConfig, enabled: newEnabled } });
-        await imService.loadStatus();
+        const success = await imService.updateConfig({ wecom: { ...wecomOpenClawConfig, enabled: newEnabled } });
+        if (success) {
+          dispatch(setWecomConfig({ enabled: newEnabled }));
+          if (newEnabled) dispatch(clearError());
+          await imService.loadStatus();
+        }
         return;
       }
 
@@ -1085,9 +1100,9 @@ const IMSettings: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Session Timeout */}
+                {/* Session Timeout (deprecated) */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-medium dark:text-claude-darkTextSecondary text-claude-textSecondary">
+                  <label className="block text-xs font-medium dark:text-claude-darkTextSecondary text-claude-textSecondary opacity-60">
                     {i18nService.t('imSessionTimeout')}
                   </label>
                   <input
@@ -1100,9 +1115,83 @@ const IMSettings: React.FC = () => {
                       }
                     }}
                     onBlur={() => handleSaveDingTalkOpenClawConfig()}
-                    className="block w-full rounded-lg dark:bg-claude-darkSurface/80 bg-claude-surface/80 dark:border-claude-darkBorder/60 border-claude-border/60 border focus:border-claude-accent focus:ring-1 focus:ring-claude-accent/30 dark:text-claude-darkText text-claude-text px-3 py-2 text-sm transition-colors"
+                    className="block w-full rounded-lg dark:bg-claude-darkSurface/80 bg-claude-surface/80 dark:border-claude-darkBorder/60 border-claude-border/60 border focus:border-claude-accent focus:ring-1 focus:ring-claude-accent/30 dark:text-claude-darkText text-claude-text px-3 py-2 text-sm transition-colors opacity-60"
                     min="1"
                     placeholder="30"
+                  />
+                </div>
+
+                {/* Separate Session by Conversation */}
+                <label className="flex items-center gap-2 text-xs dark:text-claude-darkTextSecondary text-claude-textSecondary">
+                  <input
+                    type="checkbox"
+                    checked={dtOpenClawConfig.separateSessionByConversation}
+                    onChange={(e) => {
+                      const update = { separateSessionByConversation: e.target.checked };
+                      handleDingTalkOpenClawChange(update);
+                      void handleSaveDingTalkOpenClawConfig(update);
+                    }}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <span>
+                    {i18nService.t('imSeparateSessionByConversation')}
+                    <span className="ml-1 opacity-60">— {i18nService.t('imSeparateSessionByConversationDesc')}</span>
+                  </span>
+                </label>
+
+                {/* Group Session Scope (only visible when separateSessionByConversation is on) */}
+                {dtOpenClawConfig.separateSessionByConversation && (
+                  <div className="space-y-1.5 pl-4">
+                    <label className="block text-xs font-medium dark:text-claude-darkTextSecondary text-claude-textSecondary">
+                      {i18nService.t('imGroupSessionScope')}
+                    </label>
+                    <select
+                      value={dtOpenClawConfig.groupSessionScope}
+                      onChange={(e) => {
+                        const update = { groupSessionScope: e.target.value as 'group' | 'group_sender' };
+                        handleDingTalkOpenClawChange(update);
+                        void handleSaveDingTalkOpenClawConfig(update);
+                      }}
+                      className="block w-full rounded-lg dark:bg-claude-darkSurface/80 bg-claude-surface/80 dark:border-claude-darkBorder/60 border-claude-border/60 border focus:border-claude-accent focus:ring-1 focus:ring-claude-accent/30 dark:text-claude-darkText text-claude-text px-3 py-2 text-sm transition-colors"
+                    >
+                      <option value="group">{i18nService.t('imGroupSessionScopeGroup')}</option>
+                      <option value="group_sender">{i18nService.t('imGroupSessionScopeGroupSender')}</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Shared Memory Across Conversations */}
+                <label className="flex items-center gap-2 text-xs dark:text-claude-darkTextSecondary text-claude-textSecondary">
+                  <input
+                    type="checkbox"
+                    checked={dtOpenClawConfig.sharedMemoryAcrossConversations}
+                    onChange={(e) => {
+                      const update = { sharedMemoryAcrossConversations: e.target.checked };
+                      handleDingTalkOpenClawChange(update);
+                      void handleSaveDingTalkOpenClawConfig(update);
+                    }}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <span>
+                    {i18nService.t('imSharedMemoryAcrossConversations')}
+                    <span className="ml-1 opacity-60">— {i18nService.t('imSharedMemoryAcrossConversationsDesc')}</span>
+                  </span>
+                </label>
+
+                {/* Gateway Base URL */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium dark:text-claude-darkTextSecondary text-claude-textSecondary">
+                    {i18nService.t('imGatewayBaseUrl')}
+                  </label>
+                  <input
+                    type="text"
+                    value={dtOpenClawConfig.gatewayBaseUrl}
+                    onChange={(e) => {
+                      handleDingTalkOpenClawChange({ gatewayBaseUrl: e.target.value });
+                    }}
+                    onBlur={() => handleSaveDingTalkOpenClawConfig()}
+                    className="block w-full rounded-lg dark:bg-claude-darkSurface/80 bg-claude-surface/80 dark:border-claude-darkBorder/60 border-claude-border/60 border focus:border-claude-accent focus:ring-1 focus:ring-claude-accent/30 dark:text-claude-darkText text-claude-text px-3 py-2 text-sm transition-colors"
+                    placeholder={i18nService.t('imGatewayBaseUrlPlaceholder')}
                   />
                 </div>
 

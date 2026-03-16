@@ -359,9 +359,10 @@ export class CronJobService {
     }
   }
 
-  async toggleJob(id: string, enabled: boolean): Promise<void> {
+  async toggleJob(id: string, enabled: boolean): Promise<ScheduledTask> {
     const client = await this.client();
-    await client.request('cron.update', { id, patch: { enabled } });
+    const job = await client.request<GatewayJob>('cron.update', { id, patch: { enabled } });
+    return mapGatewayJob(job);
   }
 
   async runJob(id: string): Promise<void> {
