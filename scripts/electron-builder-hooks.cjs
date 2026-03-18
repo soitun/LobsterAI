@@ -6,7 +6,7 @@ const { spawnSync } = require('child_process');
 const asar = require('@electron/asar');
 const { ensurePortablePythonRuntime, checkRuntimeHealth } = require('./setup-python-runtime.js');
 const { syncLocalOpenClawExtensions } = require('./sync-local-openclaw-extensions.cjs');
-const { packDirectory: packOpenClawTar } = require('./pack-openclaw-tar.cjs');
+const { packMultipleSources } = require('./pack-openclaw-tar.cjs');
 
 function isWindowsTarget(context) {
   return context?.electronPlatformName === 'win32';
@@ -495,23 +495,16 @@ async function beforePack(context) {
 
     console.log(`[electron-builder-hooks] Packing combined Windows tar: ${outputTar}`);
     const t0 = Date.now();
-    const packer = packOpenClawTar(null, outputTar);
 
-    for (const source of sources) {
-      if (!existsSync(source.dir)) {
-        console.warn(`[electron-builder-hooks]   Skipping ${source.label}: source not found at ${source.dir}`);
-        continue;
-      }
-      console.log(`[electron-builder-hooks]   Adding ${source.prefix} ← ${source.dir}`);
-      packer.addSource(source.dir, source.prefix);
-    }
+    // Remove old tar if exists
+    if (existsSync(outputTar)) rmSync(outputTar);
 
-    const { totalFiles, totalDirs, skippedFiles } = packer.finalize();
+    const { totalFiles, skipped } = packMultipleSources(sources, outputTar);
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
     const sizeMB = (statSync(outputTar).size / (1024 * 1024)).toFixed(1);
     console.log(
       `[electron-builder-hooks] Combined tar packed in ${elapsed}s: `
-      + `${totalFiles} files, ${totalDirs} dirs, ${skippedFiles} skipped, ${sizeMB} MB`
+      + `${totalFiles} files, ${skipped} skipped, ${sizeMB} MB`
     );
   }
 
