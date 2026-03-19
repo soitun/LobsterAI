@@ -142,6 +142,7 @@
       "nsis"
     ],
     "icon": "build/icons/win/icon.ico",
+    "requestedExecutionLevel": "requireAdministrator",
     "extraResources": [
       {
         "from": "build-tar/win-resources.tar",
@@ -235,7 +236,6 @@
     "allowToChangeInstallationDirectory": true,
     "runAfterFinish": true,
     "deleteAppDataOnUninstall": true,
-    "allowElevation": true,
     "include": "scripts/nsis-installer.nsh"
   },
   "electronVersion": "40.2.1",
