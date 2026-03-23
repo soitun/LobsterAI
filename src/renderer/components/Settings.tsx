@@ -1553,11 +1553,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
       }
       
       let normalizedBaseUrl = effectiveBaseUrl.replace(/\/+$/, '');
-      // 统一为两种协议格式：
-      // - anthropic: /v1/messages
-      // - openai provider: /v1/responses
-      // - other openai-compatible providers: /v1/chat/completions
-      const useAnthropicFormat = effectiveApiFormat === 'anthropic';
 
       // Determine effective API key and OAuth-specific settings
       let effectiveApiKey = providerConfig.apiKey;
@@ -1654,6 +1649,13 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, onUpda
           firstModel.id = defaultQwenModel?.id || 'qwen3.5-plus';
         }
       }
+
+      // Determine format after all overrides (OAuth may switch to openai)
+      // 统一为两种协议格式：
+      // - anthropic: /v1/messages
+      // - openai provider: /v1/responses
+      // - other openai-compatible providers: /v1/chat/completions
+      const useAnthropicFormat = effectiveApiFormat === 'anthropic';
 
       if (useAnthropicFormat) {
         const anthropicUrl = normalizedBaseUrl.endsWith('/v1')
