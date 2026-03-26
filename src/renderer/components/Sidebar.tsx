@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import { coworkService } from '../services/cowork';
@@ -42,12 +42,26 @@ const Sidebar: React.FC<SidebarProps> = ({
   updateBadge,
 }) => {
   const sessions = useSelector((state: RootState) => state.cowork.sessions);
+  const hasMoreSessions = useSelector((state: RootState) => state.cowork.hasMoreSessions);
   const currentSessionId = useSelector((state: RootState) => state.cowork.currentSessionId);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const sessionListScrollRef = useRef<HTMLDivElement>(null);
   const isMac = window.electron.platform === 'darwin';
+
+  const handleSessionListScroll = useCallback(async () => {
+    const el = sessionListScrollRef.current;
+    if (!el || !hasMoreSessions || isLoadingMore) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 100) {
+      setIsLoadingMore(true);
+      await coworkService.loadMoreSessions();
+      setIsLoadingMore(false);
+    }
+  }, [hasMoreSessions, isLoadingMore]);
 
   useEffect(() => {
     const handleSearch = () => {
@@ -220,7 +234,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-2.5 pb-4">
+      <div
+        ref={sessionListScrollRef}
+        className="flex-1 overflow-y-auto px-2.5 pb-4"
+        onScroll={handleSessionListScroll}
+      >
         <div className="px-3 pb-2 text-sm font-medium dark:text-claude-darkTextSecondary text-claude-textSecondary">
           {i18nService.t('coworkHistory')}
         </div>
@@ -236,6 +254,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           onToggleSelection={handleToggleSelection}
           onEnterBatchMode={handleEnterBatchMode}
         />
+        {isLoadingMore && (
+          <div className="py-2 text-center text-xs dark:text-claude-darkTextSecondary text-claude-textSecondary">
+            {i18nService.t('loading')}
+          </div>
+        )}
       </div>
       <CoworkSearchModal
         isOpen={isSearchOpen}

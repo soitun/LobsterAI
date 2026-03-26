@@ -339,6 +339,10 @@ export interface CoworkSession {
   executionMode: CoworkExecutionMode;
   activeSkillIds: string[];
   messages: CoworkMessage[];
+  /** Offset of the first loaded message in the full message history. */
+  messagesOffset: number;
+  /** Total number of messages stored for this session. */
+  totalMessages: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -542,12 +546,14 @@ export class CoworkStore {
       executionMode,
       activeSkillIds,
       messages: [],
+      messagesOffset: 0,
+      totalMessages: 0,
       createdAt: now,
       updatedAt: now,
     };
   }
 
-  getSession(id: string): CoworkSession | null {
+  getSession(id: string, messageLimit = 50): CoworkSession | null {
     interface SessionRow {
       id: string;
       title: string;
@@ -570,7 +576,11 @@ export class CoworkStore {
 
     if (!row) return null;
 
-    const messages = this.getSessionMessages(id);
+    const totalMessages = this.countSessionMessages(id);
+    const messageOffset = Math.max(0, totalMessages - messageLimit);
+    const messages = messageOffset > 0
+      ? this.getPagedSessionMessages(id, messageLimit, messageOffset)
+      : this.getSessionMessages(id);
 
     let activeSkillIds: string[] = [];
     if (row.active_skill_ids) {
@@ -592,6 +602,8 @@ export class CoworkStore {
       executionMode: (row.execution_mode as CoworkExecutionMode) || 'local',
       activeSkillIds,
       messages,
+      messagesOffset: messageOffset,
+      totalMessages,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -663,7 +675,12 @@ export class CoworkStore {
     this.saveDb();
   }
 
-  listSessions(): CoworkSessionSummary[] {
+  countSessions(): number {
+    const result = this.db.exec('SELECT COUNT(*) FROM cowork_sessions');
+    return (result[0]?.values[0]?.[0] as number) || 0;
+  }
+
+  listSessions(limit = 50, offset = 0): CoworkSessionSummary[] {
     interface SessionSummaryRow {
       id: string;
       title: string;
@@ -677,7 +694,8 @@ export class CoworkStore {
       SELECT id, title, status, pinned, created_at, updated_at
       FROM cowork_sessions
       ORDER BY pinned DESC, updated_at DESC
-    `);
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
 
     return rows.map(row => ({
       id: row.id,
@@ -731,6 +749,33 @@ export class CoworkStore {
     }
 
     return deduped;
+  }
+
+  countSessionMessages(sessionId: string): number {
+    const result = this.db.exec('SELECT COUNT(*) FROM cowork_messages WHERE session_id = ?', [sessionId]);
+    return (result[0]?.values[0]?.[0] as number) || 0;
+  }
+
+  getPagedSessionMessages(sessionId: string, limit: number, offset: number): CoworkMessage[] {
+    const rows = this.getAll<CoworkMessageRow>(`
+      SELECT id, type, content, metadata, created_at, sequence
+      FROM (
+        SELECT id, type, content, metadata, created_at, sequence, ROWID as rowid_
+        FROM cowork_messages
+        WHERE session_id = ?
+        ORDER BY COALESCE(sequence, created_at) ASC, created_at ASC, ROWID ASC
+        LIMIT ? OFFSET ?
+      )
+      ORDER BY COALESCE(sequence, created_at) ASC, created_at ASC, rowid_ ASC
+    `, [sessionId, limit, offset]);
+
+    return rows.map(row => ({
+      id: row.id,
+      type: row.type as CoworkMessageType,
+      content: row.content,
+      timestamp: row.created_at,
+      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+    }));
   }
 
   private getSessionMessages(sessionId: string): CoworkMessage[] {

@@ -218,6 +218,8 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
               : undefined,
           },
         ],
+        messagesOffset: 0,
+        totalMessages: 1,
       };
 
       // Immediately show the session detail page with user message

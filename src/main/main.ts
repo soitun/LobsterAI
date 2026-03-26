@@ -2616,14 +2616,33 @@ if (!gotTheLock) {
     }
   });
 
-  ipcMain.handle('cowork:session:list', async () => {
+  ipcMain.handle('cowork:session:list', async (_event, options?: { limit?: number; offset?: number }) => {
     try {
-      const sessions = getCoworkStore().listSessions();
-      return { success: true, sessions };
+      const limit = options?.limit ?? 50;
+      const offset = options?.offset ?? 0;
+      const store = getCoworkStore();
+      const sessions = store.listSessions(limit, offset);
+      const total = store.countSessions();
+      return { success: true, sessions, hasMore: offset + sessions.length < total };
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to list sessions',
+      };
+    }
+  });
+
+  ipcMain.handle('cowork:session:getMessages', async (_event, options: { sessionId: string; limit?: number; offset?: number }) => {
+    try {
+      const { sessionId, limit = 50, offset = 0 } = options;
+      const store = getCoworkStore();
+      const total = store.countSessionMessages(sessionId);
+      const messages = store.getPagedSessionMessages(sessionId, limit, offset);
+      return { success: true, messages, offset, total };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get session messages',
       };
     }
   });

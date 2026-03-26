@@ -26,6 +26,8 @@ interface CoworkSession {
   executionMode: 'auto' | 'local' | 'sandbox';
   activeSkillIds: string[];
   messages: CoworkMessage[];
+  messagesOffset: number;
+  totalMessages: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -319,7 +321,8 @@ interface IElectronAPI {
     renameSession: (options: { sessionId: string; title: string }) => Promise<{ success: boolean; error?: string }>;
     getSession: (sessionId: string) => Promise<{ success: boolean; session?: CoworkSession; error?: string }>;
     remoteManaged: (sessionId: string) => Promise<{ success: boolean; remoteManaged: boolean; error?: string }>;
-    listSessions: () => Promise<{ success: boolean; sessions?: CoworkSessionSummary[]; error?: string }>;
+    listSessions: (options?: { limit?: number; offset?: number }) => Promise<{ success: boolean; sessions?: CoworkSessionSummary[]; hasMore?: boolean; error?: string }>;
+    getSessionMessages: (options: { sessionId: string; limit?: number; offset?: number }) => Promise<{ success: boolean; messages?: CoworkMessage[]; offset?: number; total?: number; error?: string }>;
     exportResultImage: (options: {
       rect: { x: number; y: number; width: number; height: number };
       defaultFileName?: string;

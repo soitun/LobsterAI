@@ -1294,6 +1294,8 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   const detailRootRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
+  const isLoadingMoreMessagesRef = useRef(false);
 
   // Turn navigation states
   // currentTurnIndex (state) drives UI rendering; currentTurnIndexRef (ref) provides
@@ -1688,6 +1690,29 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
       hideNavTimerRef.current = setTimeout(() => setShowTurnNav(false), NAV_HIDE_DELAY);
     }
 
+    // Load older messages when scrolled near the top
+    if (container.scrollTop <= 80 && !isLoadingMoreMessagesRef.current) {
+      const sessionId = currentSession?.id;
+      const offset = currentSession?.messagesOffset ?? 0;
+      if (sessionId && offset > 0) {
+        isLoadingMoreMessagesRef.current = true;
+        setIsLoadingMoreMessages(true);
+        const prevScrollHeight = container.scrollHeight;
+        coworkService.loadMoreMessages(sessionId).then(() => {
+          // Restore scroll position after prepending messages
+          requestAnimationFrame(() => {
+            const newScrollHeight = container.scrollHeight;
+            container.scrollTop += newScrollHeight - prevScrollHeight;
+            isLoadingMoreMessagesRef.current = false;
+            setIsLoadingMoreMessages(false);
+          });
+        }).catch(() => {
+          isLoadingMoreMessagesRef.current = false;
+          setIsLoadingMoreMessages(false);
+        });
+      }
+    }
+
     // Skip index recalculation during programmatic navigation
     if (isNavigatingRef.current) return;
 
@@ -1714,7 +1739,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
     }
     currentTurnIndexRef.current = visibleIndex;
     setCurrentTurnIndex(visibleIndex);
-  }, []);
+  }, [currentSession?.id, currentSession?.messagesOffset]);
 
   const navigateToTurnByIndex = useCallback((index: number) => {
     const turnEls = turnElsCacheRef.current;
@@ -2102,6 +2127,11 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
           onScroll={handleMessagesScroll}
           className="h-full min-h-0 overflow-y-auto pt-3"
         >
+          {isLoadingMoreMessages && (
+            <div className="py-2 text-center text-xs dark:text-claude-darkTextSecondary text-claude-textSecondary">
+              {i18nService.t('loading')}
+            </div>
+          )}
           {renderConversationTurns()}
           <div className="h-20" />
         </div>
