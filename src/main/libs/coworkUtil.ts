@@ -1309,6 +1309,22 @@ export async function getEnhancedEnv(target: OpenAICompatProxyTarget = 'local'):
 
   applyPackagedEnvOverrides(env);
 
+  // Inject MiniMax skill env vars when current provider is minimax.
+  // This allows minimax-image-understanding and minimax-multimodal-toolkit
+  // skills to use the already-configured API key without extra user setup.
+  const resolution = resolveCurrentApiConfig(target);
+  if (resolution.providerMetadata?.providerName === 'minimax' && resolution.config?.apiKey) {
+    env.MINIMAX_API_KEY = resolution.config.apiKey;
+    // Derive API host from the provider's baseURL
+    // e.g. https://api.minimaxi.com/anthropic → https://api.minimaxi.com
+    //      https://api.minimax.io/anthropic   → https://api.minimax.io
+    try {
+      env.MINIMAX_API_HOST = new URL(resolution.config.baseURL).origin;
+    } catch {
+      env.MINIMAX_API_HOST = 'https://api.minimaxi.com';
+    }
+  }
+
   // Inject SKILLs directory path for skill scripts.
   // On Windows, normalise backslashes to forward slashes so the value is usable
   // in both Node.js (which accepts forward slashes) and bash (which treats

@@ -29,27 +29,27 @@ metadata:
 
 ## 配置
 
-### API Key
+### 方式一：使用 MiniMax 模型时自动生效（推荐）
 
-从环境变量 `MINIMAX_API_KEY` 读取，密钥以 `sk-api-` 或 `sk-cp-` 开头。
+当你在 LobsterAI 中选择 MiniMax 作为模型提供商时，已配置的 API Key 会自动注入为 `MINIMAX_API_KEY` 环境变量，无需额外配置。
 
-```bash
-# macOS / Linux
-export MINIMAX_API_KEY="your-api-key-here"
+### 方式二：通过 Skill .env 文件手动配置
 
-# Windows PowerShell
-$env:MINIMAX_API_KEY="your-api-key-here"
+如果你使用的是其他模型提供商（如 DeepSeek、GLM），但仍想使用 MiniMax 图片理解能力，可以在 skill 目录下创建 `.env` 文件：
+
+```
+# 文件位置: SKILLs/minimax-image-understanding/.env
+MINIMAX_API_KEY=sk-api-your-key-here
+MINIMAX_API_HOST=https://api.minimaxi.com
 ```
 
-可在 https://platform.minimaxi.com 获取。
+也可以通过 LobsterAI「技能」面板中的设置功能配置。
+
+密钥以 `sk-api-` 或 `sk-cp-` 开头，可在 https://platform.minimaxi.com 获取。
 
 ### API Host（可选）
 
-默认 `https://api.minimaxi.com`（中国大陆）。如需使用海外节点：
-
-```bash
-export MINIMAX_API_HOST="https://api.minimax.io"
-```
+默认 `https://api.minimaxi.com`（中国大陆）。海外节点使用 `https://api.minimax.io`。
 
 ## 使用方法
 

@@ -1002,6 +1002,20 @@ export class OpenClawConfigSync {
     // OpenClaw treats empty string as "missing", so use a non-empty placeholder.
     env.LOBSTER_PROVIDER_API_KEY = apiResolution.config?.apiKey || 'unconfigured';
 
+    // MiniMax skill env vars — inject when current provider is minimax so that
+    // minimax-image-understanding and minimax-multimodal-toolkit skills can
+    // access the API key without extra user configuration.
+    if (apiResolution.providerMetadata?.providerName === 'minimax' && apiResolution.config?.apiKey) {
+      env.MINIMAX_API_KEY = apiResolution.config.apiKey;
+      // Derive API host from the provider's baseURL
+      // e.g. https://api.minimaxi.com/anthropic → https://api.minimaxi.com
+      try {
+        env.MINIMAX_API_HOST = new URL(apiResolution.config.baseURL).origin;
+      } catch {
+        env.MINIMAX_API_HOST = 'https://api.minimaxi.com';
+      }
+    }
+
     // MCP Bridge Secret — always set so stale openclaw.json with
     // ${LOBSTER_MCP_BRIDGE_SECRET} placeholder doesn't crash the gateway.
     const mcpBridgeCfg = this.getMcpBridgeConfig?.();
