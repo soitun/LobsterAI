@@ -14,7 +14,6 @@ import { buildScheduledTaskEnginePrompt } from '../../scheduled-task/enginePromp
 export type McpBridgeConfig = {
   callbackUrl: string;
   askUserCallbackUrl: string;
-  secret: string;
   tools: McpToolManifestEntry[];
 };
 
@@ -733,7 +732,7 @@ export class OpenClawConfigSync {
         ...entries['mcp-bridge'],
         config: {
           callbackUrl: mcpBridgeCfg.callbackUrl,
-          secret: '${LOBSTER_MCP_BRIDGE_SECRET}',
+          secret: 'local',
           tools: mcpBridgeCfg.tools,
         },
       };
@@ -747,7 +746,7 @@ export class OpenClawConfigSync {
         enabled: true,
         config: {
           callbackUrl: mcpBridgeCfg.askUserCallbackUrl,
-          secret: '${LOBSTER_MCP_BRIDGE_SECRET}',
+          secret: 'local',
         },
       };
     }
@@ -1118,10 +1117,10 @@ export class OpenClawConfigSync {
     // is never resolved. Use a fixed value to avoid secretEnvVarsChanged on switch.
     env.LOBSTER_PROVIDER_API_KEY = 'legacy-unused';
 
-    // MCP Bridge Secret — always set so stale openclaw.json with
-    // ${LOBSTER_MCP_BRIDGE_SECRET} placeholder doesn't crash the gateway.
-    const mcpBridgeCfg = this.getMcpBridgeConfig?.();
-    env.LOBSTER_MCP_BRIDGE_SECRET = mcpBridgeCfg?.secret || 'unconfigured';
+    // MCP Bridge Secret — kept for backwards-compat with stale openclaw.json files
+    // that still contain the ${LOBSTER_MCP_BRIDGE_SECRET} placeholder.
+    // The server no longer validates this value; a fixed string is sufficient.
+    env.LOBSTER_MCP_BRIDGE_SECRET = 'local';
 
     // Telegram
     const tgConfig = this.getTelegramOpenClawConfig?.();
