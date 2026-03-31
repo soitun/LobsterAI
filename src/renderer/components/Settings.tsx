@@ -3102,14 +3102,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
       case 'coworkMemory':
         return (
           <div className="space-y-6">
-            {/* Section 1: Long-term Memory (MEMORY.md) */}
-            <div className="space-y-3 rounded-xl border px-4 py-4 border-border">
-              <div className="text-sm font-medium text-foreground">
-                {i18nService.t('coworkMemoryTitle')}
-              </div>
-              {/* Memory toggle hidden – always enabled by default */}
-            </div>
-
             <div className="space-y-4 rounded-xl border px-4 py-4 border-border">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">

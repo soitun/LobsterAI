@@ -2,7 +2,6 @@ import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
-import { getMainAgentWorkspacePath } from './openclawMemoryFile';
 import { buildScheduledTaskEnginePrompt } from '../../scheduledTask/enginePrompt';
 import {
   AuthType,
@@ -37,6 +36,7 @@ import {
 } from './openclawAgentModels';
 import { parseChannelSessionKey } from './openclawChannelSessionSync';
 import type { OpenClawEngineManager } from './openclawEngineManager';
+import { getMainAgentWorkspacePath } from './openclawMemoryFile';
 
 const gwDiagTs = (): string => {
   const d = new Date();

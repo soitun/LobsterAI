@@ -46,7 +46,6 @@ import {
   setCopilotTokenState,
 } from './libs/copilotTokenManager';
 import { saveCoworkApiConfig } from './libs/coworkConfigStore';
-import { migrateMainAgentWorkspace } from './libs/openclawWorkspaceMigration';
 import { getCoworkLogPath } from './libs/coworkLogger';
 import { registerProxyTokenRefresher, startCoworkOpenAICompatProxy, stopCoworkOpenAICompatProxy } from './libs/coworkOpenAICompatProxy';
 import { generateSessionTitle, probeCoworkModelReadiness } from './libs/coworkUtil';
@@ -78,6 +77,7 @@ import {
   writeBootstrapFile,
 } from './libs/openclawMemoryFile';
 import { startOpenClawTokenProxy, stopOpenClawTokenProxy } from './libs/openclawTokenProxy';
+import { migrateMainAgentWorkspace } from './libs/openclawWorkspaceMigration';
 import { ensurePythonRuntimeReady } from './libs/pythonRuntime';
 import { serializeForLog } from './libs/sanitizeForLog';
 import { SqliteBackupManager } from './libs/sqliteBackup/sqliteBackupManager';
@@ -4092,7 +4092,7 @@ if (!gotTheLock) {
 
       if (instance.transport === 'imap') {
         // Test IMAP connection using node-imap
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic require with no type definitions
+         
         let Imap: new (config: Record<string, unknown>) => any;
         try {
           Imap = require('imap');
