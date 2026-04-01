@@ -197,6 +197,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('cowork:session:captureImageChunk', options),
     saveResultImage: (options: { pngBase64: string; defaultFileName?: string }) =>
       ipcRenderer.invoke('cowork:session:saveResultImage', options),
+    exportSessionText: (options: { content: string; defaultFileName?: string; fileExtension?: string }) =>
+      ipcRenderer.invoke('cowork:session:exportText', options),
 
     // Permission handling
     respondToPermission: (options: { requestId: string; result: any }) =>

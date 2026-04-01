@@ -2891,6 +2891,47 @@ if (!gotTheLock) {
     }
   });
 
+  ipcMain.handle('cowork:session:exportText', async (
+    event,
+    options: {
+      content: string;
+      defaultFileName?: string;
+      fileExtension?: string;
+    }
+  ) => {
+    try {
+      const content = typeof options?.content === 'string' ? options.content : '';
+      if (!content) {
+        return { success: false, error: 'Export content is empty' };
+      }
+
+      const ext = options?.fileExtension || 'md';
+      const filterName = ext === 'json' ? 'JSON' : 'Markdown';
+      const defaultName = options?.defaultFileName || `session-export.${ext}`;
+      const ownerWindow = BrowserWindow.fromWebContents(event.sender);
+      const saveOptions = {
+        title: 'Export Session',
+        defaultPath: path.join(app.getPath('downloads'), defaultName),
+        filters: [{ name: filterName, extensions: [ext] }],
+      };
+      const saveResult = ownerWindow
+        ? await dialog.showSaveDialog(ownerWindow, saveOptions)
+        : await dialog.showSaveDialog(saveOptions);
+
+      if (saveResult.canceled || !saveResult.filePath) {
+        return { success: true, canceled: true };
+      }
+
+      await fs.promises.writeFile(saveResult.filePath, content, 'utf-8');
+      return { success: true, canceled: false, path: saveResult.filePath };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export session',
+      };
+    }
+  });
+
   ipcMain.handle('cowork:permission:respond', async (_event, options: {
     requestId: string;
     result: PermissionResult;
