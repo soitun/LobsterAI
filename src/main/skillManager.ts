@@ -873,14 +873,14 @@ const downloadClawhubSkill = async (
   let args: string[];
   if (npxCliJs) {
     command = electronPath;
-    args = [npxCliJs, 'clawhub@latest', 'install', skillName, '--dir', targetDir, '--no-input'];
+    args = [npxCliJs, 'clawhub@latest', 'install', skillName, '--dir', targetDir, '--no-input', '--force'];
   } else {
     const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
     if (!hasCommand(npxCommand, env)) {
       throw new Error('npx is not available. Please install Node.js from https://nodejs.org/');
     }
     command = npxCommand;
-    args = ['clawhub@latest', 'install', skillName, '--dir', targetDir, '--no-input'];
+    args = ['clawhub@latest', 'install', skillName, '--dir', targetDir, '--no-input', '--force'];
   }
 
   await runCommand(command, args, {

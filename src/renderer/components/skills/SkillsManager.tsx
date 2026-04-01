@@ -318,7 +318,30 @@ const SkillsManager: React.FC<SkillsManagerProps> = ({ readOnly }) => {
 
   const handleImportFromDialog = async () => {
     if (isDownloadingSkill) return;
-    await handleAddSkillFromSource(skillDownloadSource);
+    const trimmed = skillDownloadSource.trim();
+    if (!trimmed) return;
+
+    // Validate URL matches the selected tab
+    try {
+      const url = new URL(trimmed);
+      const host = url.hostname.toLowerCase();
+      if (importTab === 'clawhub' && host !== 'clawhub.ai' && host !== 'www.clawhub.ai') {
+        setSkillActionError(i18nService.t('importSourceMismatchClawhub'));
+        return;
+      }
+      if (importTab === 'github' && !host.includes('github.com') && !host.includes('github.io')) {
+        setSkillActionError(i18nService.t('importSourceMismatchGithub'));
+        return;
+      }
+    } catch {
+      // Not a URL (e.g. "owner/repo" shorthand for GitHub) — only allow on GitHub tab
+      if (importTab === 'clawhub') {
+        setSkillActionError(i18nService.t('importSourceMismatchClawhub'));
+        return;
+      }
+    }
+
+    await handleAddSkillFromSource(trimmed);
   };
 
   const getSkillInstallStatus = (marketplaceSkill: MarketplaceSkill): 'not_installed' | 'installed' | 'update_available' => {
