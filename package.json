@@ -109,7 +109,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.12",
     "@electron/remote": "^2.0.12",
-    "@headlessui/react": "^1.7.18",
+    "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.1.1",
     "@larksuite/openclaw-lark": "^2026.3.17",
     "@larksuite/openclaw-lark-tools": "~1.0.26",
