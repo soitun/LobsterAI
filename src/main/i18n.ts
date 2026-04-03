@@ -75,6 +75,8 @@ const translations: Record<LanguageType, Record<string, string>> = {
     // Skill manager errors
     skillErrNoSkillMd: '来源中未找到 SKILL.md',
     skillErrInvalidSource: '无效的技能来源。支持 owner/repo、仓库链接、npm 包名、ClawHub 链接或 GitHub tree/blob 链接。',
+    skillErrClawhubNotFound: '在 ClawHub 上未找到该技能，请检查链接是否正确。',
+    skillErrClawhubDownloadFailed: '从 ClawHub 下载技能失败，请稍后重试。',
 
     // Auth quota
     authPlanFree: '免费',
@@ -247,6 +249,8 @@ const translations: Record<LanguageType, Record<string, string>> = {
     // Skill manager errors
     skillErrNoSkillMd: 'No SKILL.md found in source',
     skillErrInvalidSource: 'Invalid skill source. Use owner/repo, repo URL, npm package spec, ClawHub URL, or a GitHub tree/blob URL.',
+    skillErrClawhubNotFound: 'Skill not found on ClawHub. Please check the URL.',
+    skillErrClawhubDownloadFailed: 'Failed to download skill from ClawHub. Please try again later.',
 
     // Auth quota
     authPlanFree: 'Free',

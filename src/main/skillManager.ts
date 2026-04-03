@@ -883,9 +883,26 @@ const downloadClawhubSkill = async (
     args = ['clawhub@latest', 'install', skillName, '--dir', targetDir, '--no-input', '--force'];
   }
 
-  await runCommand(command, args, {
-    env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
-  });
+  try {
+    await runCommand(command, args, {
+      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+    });
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error);
+    // Strip ANSI escape codes and decode URL-encoded characters
+    const cleaned = raw
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b\[[0-9;]*m/g, '')
+      .replace(/%[0-9A-Fa-f]{2}/g, (match) => {
+        try { return decodeURIComponent(match); } catch { return match; }
+      })
+      .trim();
+
+    if (/skill not found/i.test(cleaned)) {
+      throw new Error(t('skillErrClawhubNotFound'));
+    }
+    throw new Error(t('skillErrClawhubDownloadFailed') + '\n' + cleaned);
+  }
 };
 
 /**
