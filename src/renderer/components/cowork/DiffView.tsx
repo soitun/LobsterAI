@@ -4,7 +4,7 @@
  * Supports unified and split (side-by-side) view modes.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useMemo,useState } from 'react';
 
 type DiffLineType = 'added' | 'removed' | 'context';
 

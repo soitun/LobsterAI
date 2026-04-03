@@ -1,21 +1,22 @@
-import { EventEmitter } from 'events';
+import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { spawn, spawnSync } from 'child_process';
 import { app } from 'electron';
+import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
-import type { CoworkStore, CoworkMessage, CoworkExecutionMode } from '../coworkStore';
-import { getClaudeCodePath, getCurrentApiConfig } from './claudeSettings';
-import { loadClaudeSdk } from './claudeSdk';
-import { getElectronNodeRuntimePath, getEnhancedEnv, getEnhancedEnvWithTmpdir, getSkillsRoot } from './coworkUtil';
-import { coworkLog, getCoworkLogPath } from './coworkLogger';
-import { ensurePythonPipReady, ensurePythonRuntimeReady } from './pythonRuntime';
-import { isDeleteCommand, isDangerousCommand } from './commandSafety';
-import { isQuestionLikeMemoryText, type CoworkMemoryGuardLevel } from './coworkMemoryExtractor';
-import { setCoworkProxySessionId } from './coworkOpenAICompatProxy';
-import { SCHEDULED_TASK_SWITCH_MESSAGE } from '../../scheduledTask/enginePrompt';
 import { z } from 'zod';
+
+import { SCHEDULED_TASK_SWITCH_MESSAGE } from '../../scheduledTask/enginePrompt';
+import type { CoworkExecutionMode,CoworkMessage, CoworkStore } from '../coworkStore';
+import { loadClaudeSdk } from './claudeSdk';
+import { getClaudeCodePath, getCurrentApiConfig } from './claudeSettings';
+import { isDangerousCommand,isDeleteCommand } from './commandSafety';
+import { coworkLog, getCoworkLogPath } from './coworkLogger';
+import { type CoworkMemoryGuardLevel,isQuestionLikeMemoryText } from './coworkMemoryExtractor';
+import { setCoworkProxySessionId } from './coworkOpenAICompatProxy';
+import { getElectronNodeRuntimePath, getEnhancedEnv, getEnhancedEnvWithTmpdir, getSkillsRoot } from './coworkUtil';
+import { ensurePythonPipReady, ensurePythonRuntimeReady } from './pythonRuntime';
 
 const ATTACHMENT_LINE_RE = /^\s*(?:[-*]\s*)?(输入文件|input\s*file)\s*[:：]\s*(.+?)\s*$/i;
 const INFERRED_FILE_REFERENCE_RE = /([^\s"'`，。！？：:；;（）()\[\]{}<>《》【】]+?\.[A-Za-z][A-Za-z0-9]{0,7})/g;

@@ -1,13 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { agentService } from '../../services/agent';
-import { imService } from '../../services/im';
-import { i18nService } from '../../services/i18n';
 import { XMarkIcon } from '@heroicons/react/24/outline';
+import React, { useEffect, useState } from 'react';
+
+import { agentService } from '../../services/agent';
+import { i18nService } from '../../services/i18n';
+import { imService } from '../../services/im';
+import type { IMGatewayConfig,IMPlatform } from '../../types/im';
 import { getVisibleIMPlatforms } from '../../utils/regionFilter';
-import type { IMPlatform, IMGatewayConfig } from '../../types/im';
+import Modal from '../common/Modal';
 import AgentSkillSelector from './AgentSkillSelector';
 import EmojiPicker from './EmojiPicker';
-import Modal from '../common/Modal';
 
 type CreateTab = 'basic' | 'skills' | 'im';
 

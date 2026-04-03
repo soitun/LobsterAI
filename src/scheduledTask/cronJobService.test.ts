@@ -1,6 +1,7 @@
-import { test, expect, describe } from 'vitest';
-import { mapGatewayRun, mapGatewayTaskState } from './cronJobService';
+import { describe,expect, test } from 'vitest';
+
 import { DeliveryMode, GatewayStatus, TaskStatus } from './constants';
+import { mapGatewayRun, mapGatewayTaskState } from './cronJobService';
 
 describe('mapGatewayRun', () => {
   const baseEntry = {

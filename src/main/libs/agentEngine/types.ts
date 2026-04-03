@@ -1,4 +1,5 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+
 import type { CoworkMessage } from '../../coworkStore';
 
 export type CoworkAgentEngine = 'openclaw' | 'yd_cowork';

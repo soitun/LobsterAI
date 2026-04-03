@@ -5,11 +5,11 @@
  * to local Cowork sessions so that conversations are visible in the LobsterAI UI.
  */
 
+import { PlatformRegistry } from '../../shared/platform';
 import type { CoworkStore } from '../coworkStore';
+import { t } from '../i18n';
 import type { IMStore } from '../im/imStore';
 import type { Platform } from '../im/types';
-import { PlatformRegistry } from '../../shared/platform';
-import { t } from '../i18n';
 
 
 const LOBSTERAI_SESSION_PREFIX = 'lobsterai:';

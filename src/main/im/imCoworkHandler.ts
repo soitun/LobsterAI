@@ -3,24 +3,25 @@
  * Adapter that enables IM (DingTalk/Feishu/Telegram) to use CoworkRuntime for tool-enabled AI execution
  */
 
+import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
-import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+
+import { buildScheduledTaskEnginePrompt } from '../../scheduledTask/enginePrompt';
+import type { CoworkMessage,CoworkStore } from '../coworkStore';
+import { t } from '../i18n';
 import type { CoworkRuntime, PermissionRequest } from '../libs/agentEngine/types';
-import type { CoworkStore, CoworkMessage } from '../coworkStore';
-import type { IMStore } from './imStore';
-import type { IMMessage, Platform, IMMediaAttachment, IMSessionMapping } from './types';
 import { buildIMMediaInstruction } from './imMediaInstruction';
 import { analyzeIMReply, DEFAULT_IM_EMPTY_REPLY } from './imReplyGuard';
 import {
-  isReminderSystemTurn,
   type IMScheduledTaskCreationResult,
   type IMScheduledTaskRequestDetector,
+  isReminderSystemTurn,
   type ParsedIMScheduledTaskRequest,
 } from './imScheduledTaskHandler';
-import { buildScheduledTaskEnginePrompt } from '../../scheduledTask/enginePrompt';
-import { t } from '../i18n';
+import type { IMStore } from './imStore';
+import type { IMMediaAttachment, IMMessage, IMSessionMapping,Platform } from './types';
 
 interface MessageAccumulator {
   messages: CoworkMessage[];

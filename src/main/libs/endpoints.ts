@@ -1,4 +1,5 @@
 import { app } from 'electron';
+
 import type { SqliteStore } from '../sqliteStore';
 
 let cachedTestMode: boolean | null = null;

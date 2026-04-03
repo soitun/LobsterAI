@@ -1,12 +1,13 @@
-import http from 'http';
 import { session } from 'electron';
+import http from 'http';
+
 import {
   anthropicToOpenAI,
   buildOpenAIChatCompletionsURL,
   formatSSEEvent,
   mapStopReason,
-  openAIToAnthropic,
   type OpenAIStreamChunk,
+  openAIToAnthropic,
 } from './coworkFormatTransform';
 
 export type OpenAICompatUpstreamConfig = {

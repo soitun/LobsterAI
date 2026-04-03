@@ -3,38 +3,39 @@
  * IPC wrapper for IM gateway operations
  */
 
-import { store } from '../store';
-import { PlatformRegistry } from '@shared/platform';
 import type { Platform } from '@shared/platform';
+import { PlatformRegistry } from '@shared/platform';
+
+import { store } from '../store';
 import {
-  setConfig,
-  setStatus,
-  setLoading,
-  setError,
-  addQQInstance,
-  removeQQInstance,
-  setQQInstanceConfig,
-  addFeishuInstance,
-  removeFeishuInstance,
-  setFeishuInstanceConfig,
   addDingTalkInstance,
+  addFeishuInstance,
+  addQQInstance,
   removeDingTalkInstance,
+  removeFeishuInstance,
+  removeQQInstance,
+  setConfig,
   setDingTalkInstanceConfig,
+  setError,
+  setFeishuInstanceConfig,
+  setLoading,
+  setQQInstanceConfig,
+  setStatus,
 } from '../store/slices/imSlice';
 import type {
-  IMGatewayConfig,
-  IMGatewayStatus,
-  IMConfigResult,
-  IMStatusResult,
-  IMGatewayResult,
-  IMConnectivityTestResult,
-  IMConnectivityTestResponse,
-  QQOpenClawConfig,
-  QQInstanceConfig,
-  FeishuOpenClawConfig,
-  FeishuInstanceConfig,
-  DingTalkOpenClawConfig,
   DingTalkInstanceConfig,
+  DingTalkOpenClawConfig,
+  FeishuInstanceConfig,
+  FeishuOpenClawConfig,
+  IMConfigResult,
+  IMConnectivityTestResponse,
+  IMConnectivityTestResult,
+  IMGatewayConfig,
+  IMGatewayResult,
+  IMGatewayStatus,
+  IMStatusResult,
+  QQInstanceConfig,
+  QQOpenClawConfig,
 } from '../types/im';
 
 class IMService {

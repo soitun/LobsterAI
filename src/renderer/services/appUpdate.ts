@@ -1,4 +1,4 @@
-import { getUpdateCheckUrl, getManualUpdateCheckUrl, getFallbackDownloadUrl } from './endpoints';
+import { getFallbackDownloadUrl,getManualUpdateCheckUrl, getUpdateCheckUrl } from './endpoints';
 
 export const UPDATE_POLL_INTERVAL_MS = 12 * 60 * 60 * 1000;
 export const UPDATE_HEARTBEAT_INTERVAL_MS = 30 * 60 * 1000;

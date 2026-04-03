@@ -1,10 +1,11 @@
+import { CheckIcon,ChevronDownIcon } from '@heroicons/react/24/outline';
 import React from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '../store';
-import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
-import { setSelectedModel, isSameModelIdentity, getModelIdentityKey } from '../store/slices/modelSlice';
-import type { Model } from '../store/slices/modelSlice';
+import { useDispatch,useSelector } from 'react-redux';
+
 import { i18nService } from '../services/i18n';
+import { RootState } from '../store';
+import type { Model } from '../store/slices/modelSlice';
+import { getModelIdentityKey,isSameModelIdentity, setSelectedModel } from '../store/slices/modelSlice';
 
 interface ModelSelectorProps {
   dropdownDirection?: 'up' | 'down';

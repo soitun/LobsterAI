@@ -1,23 +1,24 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import { ShieldCheckIcon } from '@heroicons/react/24/outline';
+import React, { useEffect, useRef,useState } from 'react';
+import { useDispatch,useSelector } from 'react-redux';
+
+import { coworkService } from '../../services/cowork';
+import { i18nService } from '../../services/i18n';
+import { quickActionService } from '../../services/quickAction';
+import { skillService } from '../../services/skill';
 import { RootState } from '../../store';
 import { addMessage, clearCurrentSession, setCurrentSession, setStreaming, updateSessionStatus } from '../../store/slices/coworkSlice';
+import { clearSelection,selectAction, setActions } from '../../store/slices/quickActionSlice';
 import { clearActiveSkills, setActiveSkillIds } from '../../store/slices/skillSlice';
-import { setActions, selectAction, clearSelection } from '../../store/slices/quickActionSlice';
-import { coworkService } from '../../services/cowork';
-import { skillService } from '../../services/skill';
-import { quickActionService } from '../../services/quickAction';
-import { i18nService } from '../../services/i18n';
+import type { CoworkImageAttachment, CoworkSession, OpenClawEngineStatus } from '../../types/cowork';
+import ComposeIcon from '../icons/ComposeIcon';
+import SidebarToggleIcon from '../icons/SidebarToggleIcon';
+import ModelSelector from '../ModelSelector';
+import { PromptPanel,QuickActionBar } from '../quick-actions';
+import type { SettingsOpenOptions } from '../Settings';
+import WindowTitleBar from '../window/WindowTitleBar';
 import CoworkPromptInput, { type CoworkPromptInputRef } from './CoworkPromptInput';
 import CoworkSessionDetail from './CoworkSessionDetail';
-import ModelSelector from '../ModelSelector';
-import SidebarToggleIcon from '../icons/SidebarToggleIcon';
-import ComposeIcon from '../icons/ComposeIcon';
-import { ShieldCheckIcon } from '@heroicons/react/24/outline';
-import WindowTitleBar from '../window/WindowTitleBar';
-import { QuickActionBar, PromptPanel } from '../quick-actions';
-import type { SettingsOpenOptions } from '../Settings';
-import type { CoworkSession, CoworkImageAttachment, OpenClawEngineStatus } from '../../types/cowork';
 
 export interface CoworkViewProps {
   onRequestAppSettings?: (options?: SettingsOpenOptions) => void;

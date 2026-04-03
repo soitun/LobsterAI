@@ -1,14 +1,15 @@
-import { app } from 'electron';
 import crypto from 'crypto';
+import { app } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { Database } from 'sql.js';
 import { v4 as uuidv4 } from 'uuid';
+
 import {
+  type CoworkMemoryGuardLevel,
   extractTurnMemoryChanges,
   isQuestionLikeMemoryText,
-  type CoworkMemoryGuardLevel,
 } from './libs/coworkMemoryExtractor';
 import { judgeMemoryCandidate } from './libs/coworkMemoryJudge';
 

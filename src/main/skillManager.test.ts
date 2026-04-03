@@ -4,7 +4,7 @@
  * Logic is mirrored inline because skillManager.ts imports Electron APIs
  * which cannot be loaded outside the Electron main process.
  */
-import { test, expect } from 'vitest';
+import { expect,test } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mirror of parseClawhubUrl from skillManager.ts

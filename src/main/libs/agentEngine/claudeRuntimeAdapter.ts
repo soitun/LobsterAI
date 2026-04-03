@@ -1,5 +1,6 @@
-import { EventEmitter } from 'events';
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+import { EventEmitter } from 'events';
+
 import type { CoworkRunner } from '../coworkRunner';
 import type {
   CoworkContinueOptions,

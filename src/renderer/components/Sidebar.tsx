@@ -1,22 +1,23 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import Modal from './common/Modal';
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import React, { useCallback,useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { RootState } from '../store';
+
 import { agentService } from '../services/agent';
 import { coworkService } from '../services/cowork';
 import { i18nService } from '../services/i18n';
-import CoworkSessionList from './cowork/CoworkSessionList';
+import { RootState } from '../store';
+import Modal from './common/Modal';
 import CoworkSearchModal from './cowork/CoworkSearchModal';
-import LoginButton from './LoginButton';
+import CoworkSessionList from './cowork/CoworkSessionList';
+import ClockIcon from './icons/ClockIcon';
 import ComposeIcon from './icons/ComposeIcon';
 import ConnectorIcon from './icons/ConnectorIcon';
-import SearchIcon from './icons/SearchIcon';
-import ClockIcon from './icons/ClockIcon';
 import PuzzleIcon from './icons/PuzzleIcon';
+import SearchIcon from './icons/SearchIcon';
 import SidebarToggleIcon from './icons/SidebarToggleIcon';
 import TrashIcon from './icons/TrashIcon';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import UserGroupIcon from './icons/UserGroupIcon';
+import LoginButton from './LoginButton';
 
 interface SidebarProps {
   onShowSettings: () => void;

@@ -1,9 +1,10 @@
+import crypto from 'crypto';
 import { app } from 'electron';
 import { EventEmitter } from 'events';
-import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
+
 import { DB_FILENAME } from './appConstants';
 
 type ChangePayload<T = unknown> = {

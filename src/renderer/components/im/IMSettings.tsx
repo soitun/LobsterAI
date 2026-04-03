@@ -3,28 +3,29 @@
  * Configuration UI for DingTalk, Feishu and Telegram IM bots
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { SignalIcon, XMarkIcon, CheckCircleIcon, XCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { EyeIcon, EyeSlashIcon, XCircleIcon as XCircleIconSolid } from '@heroicons/react/20/solid';
-import { RootState } from '../../store';
-import { imService } from '../../services/im';
-import { setDingTalkConfig, setDingTalkInstanceConfig, setFeishuConfig, setFeishuInstanceConfig, setTelegramOpenClawConfig, setQQConfig, setQQInstanceConfig, setDiscordConfig, setNimConfig, setNeteaseBeeChanConfig, setWecomConfig, setWeixinConfig, setPopoConfig, clearError } from '../../store/slices/imSlice';
-import { i18nService } from '../../services/i18n';
-import type { IMConnectivityCheck, IMConnectivityTestResult, IMGatewayConfig, TelegramOpenClawConfig, DiscordOpenClawConfig, WecomOpenClawConfig, PopoOpenClawConfig } from '../../types/im';
-import { MAX_QQ_INSTANCES, MAX_FEISHU_INSTANCES, MAX_DINGTALK_INSTANCES } from '../../types/im';
-import QQInstanceSettings from './QQInstanceSettings';
-import FeishuInstanceSettings from './FeishuInstanceSettings';
-import DingTalkInstanceSettings from './DingTalkInstanceSettings';
-import { PlatformRegistry } from '@shared/platform';
+import { CheckCircleIcon, ExclamationTriangleIcon,SignalIcon, XCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import type { Platform } from '@shared/platform';
-import { getVisibleIMPlatforms } from '../../utils/regionFilter';
+import { PlatformRegistry } from '@shared/platform';
 import WecomAIBotSDK from '@wecom/wecom-aibot-sdk';
 import { QRCodeSVG } from 'qrcode.react';
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
-import { SchemaForm } from './SchemaForm';
-import type { UiHint } from './SchemaForm';
+import React, { useEffect, useMemo, useRef,useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+
+import { i18nService } from '../../services/i18n';
+import { imService } from '../../services/im';
+import { RootState } from '../../store';
+import { clearError,setDingTalkConfig, setDingTalkInstanceConfig, setDiscordConfig, setFeishuConfig, setFeishuInstanceConfig, setNeteaseBeeChanConfig, setNimConfig, setPopoConfig, setQQConfig, setQQInstanceConfig, setTelegramOpenClawConfig, setWecomConfig, setWeixinConfig } from '../../store/slices/imSlice';
+import type { DiscordOpenClawConfig, IMConnectivityCheck, IMConnectivityTestResult, IMGatewayConfig, PopoOpenClawConfig,TelegramOpenClawConfig, WecomOpenClawConfig } from '../../types/im';
+import { MAX_DINGTALK_INSTANCES,MAX_FEISHU_INSTANCES, MAX_QQ_INSTANCES } from '../../types/im';
+import { getVisibleIMPlatforms } from '../../utils/regionFilter';
 import Modal from '../common/Modal';
+import DingTalkInstanceSettings from './DingTalkInstanceSettings';
+import FeishuInstanceSettings from './FeishuInstanceSettings';
+import QQInstanceSettings from './QQInstanceSettings';
+import type { UiHint } from './SchemaForm';
+import { SchemaForm } from './SchemaForm';
 
 
 

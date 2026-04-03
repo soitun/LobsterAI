@@ -1,7 +1,8 @@
-import { test, expect } from 'vitest';
 import initSqlJs from 'sql.js';
+import { expect,test } from 'vitest';
+
+import { BindingKind,OriginKind } from './constants';
 import { ScheduledTaskMetaStore } from './metaStore';
-import { OriginKind, BindingKind } from './constants';
 
 async function createMetaStore() {
   const SQL = await initSqlJs();

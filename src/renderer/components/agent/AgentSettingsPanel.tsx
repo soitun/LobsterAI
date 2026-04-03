@@ -1,19 +1,20 @@
+import { XMarkIcon } from '@heroicons/react/24/outline';
+import type { Platform } from '@shared/platform';
+import { PlatformRegistry } from '@shared/platform';
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { RootState } from '../../store';
+
 import { agentService } from '../../services/agent';
-import { imService } from '../../services/im';
 import { i18nService } from '../../services/i18n';
-import { XMarkIcon } from '@heroicons/react/24/outline';
-import TrashIcon from '../icons/TrashIcon';
+import { imService } from '../../services/im';
+import { RootState } from '../../store';
 import type { Agent } from '../../types/agent';
-import type { Platform } from '@shared/platform';
 import type { IMGatewayConfig } from '../../types/im';
 import { getVisibleIMPlatforms } from '../../utils/regionFilter';
-import { PlatformRegistry } from '@shared/platform';
+import Modal from '../common/Modal';
+import TrashIcon from '../icons/TrashIcon';
 import AgentSkillSelector from './AgentSkillSelector';
 import EmojiPicker from './EmojiPicker';
-import Modal from '../common/Modal';
 
 type SettingsTab = 'basic' | 'skills' | 'im';
 
