@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import Modal from './common/Modal';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import { agentService } from '../services/agent';
@@ -14,7 +15,8 @@ import ClockIcon from './icons/ClockIcon';
 import PuzzleIcon from './icons/PuzzleIcon';
 import SidebarToggleIcon from './icons/SidebarToggleIcon';
 import TrashIcon from './icons/TrashIcon';
-import { ExclamationTriangleIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import UserGroupIcon from './icons/UserGroupIcon';
 
 interface SidebarProps {
   onShowSettings: () => void;
@@ -29,6 +31,7 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   updateBadge?: React.ReactNode;
+  hideLogin?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -43,11 +46,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   onToggleCollapse,
   updateBadge,
+  hideLogin,
 }) => {
   const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
   const sessions = useSelector((state: RootState) => state.cowork.sessions);
   const hasMoreSessions = useSelector((state: RootState) => state.cowork.hasMoreSessions);
-  const filteredSessions = sessions.filter((s) => !s.agentId || s.agentId === currentAgentId);
+  const filteredSessions = sessions.filter(s => !s.agentId || s.agentId === currentAgentId);
   const currentSessionId = useSelector((state: RootState) => state.cowork.currentSessionId);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isBatchMode, setIsBatchMode] = useState(false);
@@ -55,6 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const sessionListScrollRef = useRef<HTMLDivElement>(null);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const isMac = window.electron.platform === 'darwin';
 
   const handleSessionListScroll = useCallback(async () => {
@@ -150,19 +155,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`shrink-0 dark:bg-claude-darkSurfaceMuted bg-claude-surfaceMuted flex flex-col sidebar-transition overflow-hidden ${
+      className={`shrink-0 bg-surface-raised flex flex-col sidebar-transition overflow-hidden ${
         isCollapsed ? 'w-0' : 'w-60'
       }`}
     >
       <div className="pt-3 pb-3">
         <div className="draggable sidebar-header-drag h-8 flex items-center justify-between px-3">
-          <div className={`${isMac ? 'pl-[68px]' : ''}`}>
-            {updateBadge}
-          </div>
+          <div className={`${isMac ? 'pl-[68px]' : ''}`}>{updateBadge}</div>
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="non-draggable h-8 w-8 inline-flex items-center justify-center rounded-lg dark:text-claude-darkTextSecondary text-claude-textSecondary hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover transition-colors"
+            className="non-draggable h-8 w-8 inline-flex items-center justify-center rounded-lg text-secondary hover:bg-surface-raised transition-colors"
             aria-label={isCollapsed ? i18nService.t('expand') : i18nService.t('collapse')}
           >
             <SidebarToggleIcon className="h-4 w-4" isCollapsed={isCollapsed} />
@@ -174,8 +177,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             onClick={onNewChat}
             className={`w-full inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
               activeView === 'cowork'
-                ? 'bg-claude-accent/10 text-claude-accent hover:bg-claude-accent/20'
-                : 'dark:text-claude-darkTextSecondary text-claude-textSecondary hover:text-claude-text dark:hover:text-claude-darkText hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover'
+                ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                : 'text-secondary hover:text-foreground hover:bg-surface-raised'
             }`}
           >
             <ComposeIcon className="h-4 w-4" />
@@ -187,7 +190,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               onShowCowork();
               setIsSearchOpen(true);
             }}
-            className="w-full inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium dark:text-claude-darkTextSecondary text-claude-textSecondary hover:text-claude-text dark:hover:text-claude-darkText hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover transition-colors"
+            className="w-full inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
           >
             <SearchIcon className="h-4 w-4" />
             {i18nService.t('search')}
@@ -200,8 +203,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             className={`w-full inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
               activeView === 'scheduledTasks'
-                ? 'bg-claude-accent/10 text-claude-accent hover:bg-claude-accent/20'
-                : 'dark:text-claude-darkTextSecondary text-claude-textSecondary hover:text-claude-text dark:hover:text-claude-darkText hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover'
+                ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                : 'text-secondary hover:text-foreground hover:bg-surface-raised'
             }`}
           >
             <ClockIcon className="h-4 w-4" />
@@ -215,8 +218,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             className={`w-full inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
               activeView === 'skills'
-                ? 'bg-claude-accent/10 text-claude-accent hover:bg-claude-accent/20'
-                : 'dark:text-claude-darkTextSecondary text-claude-textSecondary hover:text-claude-text dark:hover:text-claude-darkText hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover'
+                ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                : 'text-secondary hover:text-foreground hover:bg-surface-raised'
             }`}
           >
             <PuzzleIcon className="h-4 w-4" />
@@ -230,8 +233,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             className={`w-full inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
               activeView === 'mcp'
-                ? 'bg-claude-accent/10 text-claude-accent hover:bg-claude-accent/20'
-                : 'dark:text-claude-darkTextSecondary text-claude-textSecondary hover:text-claude-text dark:hover:text-claude-darkText hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover'
+                ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                : 'text-secondary hover:text-foreground hover:bg-surface-raised'
             }`}
           >
             <ConnectorIcon className="h-4 w-4" />
@@ -245,8 +248,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
             className={`w-full inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
               activeView === 'agents'
-                ? 'bg-claude-accent/10 text-claude-accent hover:bg-claude-accent/20'
-                : 'dark:text-claude-darkTextSecondary text-claude-textSecondary hover:text-claude-text dark:hover:text-claude-darkText hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover'
+                ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                : 'text-secondary hover:text-foreground hover:bg-surface-raised'
             }`}
           >
             <UserGroupIcon className="h-4 w-4" />
@@ -261,12 +264,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       >
         <SidebarAgentList
           onShowCowork={onShowCowork}
+          onSessionsLoadingChange={setSessionsLoading}
         />
-        <div className="px-3 pb-2 text-sm font-medium dark:text-claude-darkTextSecondary text-claude-textSecondary">
+        <div className="px-3 pb-2 text-sm font-medium text-secondary">
           {i18nService.t('coworkHistory')}
         </div>
         <CoworkSessionList
           sessions={filteredSessions}
+          isLoading={sessionsLoading}
           currentSessionId={currentSessionId}
           isBatchMode={isBatchMode}
           selectedIds={selectedIds}
@@ -295,12 +300,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       />
       {isBatchMode ? (
         <div className="px-3 pb-3 pt-1 flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer text-sm dark:text-claude-darkTextSecondary text-claude-textSecondary">
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-secondary">
             <input
               type="checkbox"
               checked={selectedIds.size === filteredSessions.length && filteredSessions.length > 0}
               onChange={handleSelectAll}
-              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 accent-claude-accent cursor-pointer"
+              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 accent-primary cursor-pointer"
             />
             {i18nService.t('batchSelectAll')}
           </label>
@@ -321,7 +326,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               onClick={handleExitBatchMode}
-              className="px-3 py-1.5 text-sm font-medium rounded-lg dark:text-claude-darkTextSecondary text-claude-textSecondary hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover transition-colors"
+              className="px-3 py-1.5 text-sm font-medium rounded-lg text-secondary hover:bg-surface-raised transition-colors"
             >
               {i18nService.t('batchCancel')}
             </button>
@@ -329,58 +334,75 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       ) : (
         <div className="px-3 pb-3 pt-1 flex items-center gap-1">
-          <LoginButton />
-          <div className="flex-1" />
+          {!hideLogin && (
+            <>
+              <LoginButton />
+              <div className="flex-1" />
+            </>
+          )}
           <button
             type="button"
             onClick={() => onShowSettings()}
-            className="inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium dark:text-claude-darkTextSecondary text-claude-textSecondary hover:text-claude-text dark:hover:text-claude-darkText hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-secondary hover:text-foreground hover:bg-surface-raised transition-colors"
             aria-label={i18nService.t('settings')}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M14 17H5" /><path d="M19 7h-9" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" /></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <path d="M14 17H5" />
+              <path d="M19 7h-9" />
+              <circle cx="17" cy="17" r="3" />
+              <circle cx="7" cy="7" r="3" />
+            </svg>
             {i18nService.t('settings')}
           </button>
         </div>
       )}
       {/* Batch Delete Confirmation Modal */}
       {showBatchDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => setShowBatchDeleteConfirm(false)}
+        <Modal
+          onClose={() => setShowBatchDeleteConfirm(false)}
+          className="w-full max-w-sm mx-4 bg-surface rounded-2xl shadow-xl overflow-hidden"
         >
-          <div
-            className="w-full max-w-sm mx-4 dark:bg-claude-darkSurface bg-claude-surface rounded-2xl shadow-xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 px-5 py-4">
-              <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
-                <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-500" />
-              </div>
-              <h2 className="text-base font-semibold dark:text-claude-darkText text-claude-text">
-                {i18nService.t('batchDeleteConfirmTitle')}
-              </h2>
+          <div className="flex items-center gap-3 px-5 py-4">
+            <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
+              <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-500" />
             </div>
-            <div className="px-5 pb-4">
-              <p className="text-sm dark:text-claude-darkTextSecondary text-claude-textSecondary">
-                {i18nService.t('batchDeleteConfirmMessage').replace('{count}', String(selectedIds.size))}
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t dark:border-claude-darkBorder border-claude-border">
-              <button
-                onClick={() => setShowBatchDeleteConfirm(false)}
-                className="px-4 py-2 text-sm font-medium rounded-lg dark:text-claude-darkTextSecondary text-claude-textSecondary dark:hover:bg-claude-darkSurfaceHover hover:bg-claude-surfaceHover transition-colors"
-              >
-                {i18nService.t('cancel')}
-              </button>
-              <button
-                onClick={handleBatchDelete}
-                className="px-4 py-2 text-sm font-medium rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
-              >
-                {i18nService.t('batchDelete')} ({selectedIds.size})
-              </button>
-            </div>
+            <h2 className="text-base font-semibold text-foreground">
+              {i18nService.t('batchDeleteConfirmTitle')}
+            </h2>
           </div>
-        </div>
+          <div className="px-5 pb-4">
+            <p className="text-sm text-secondary">
+              {i18nService
+                .t('batchDeleteConfirmMessage')
+                .replace('{count}', String(selectedIds.size))}
+            </p>
+          </div>
+          <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-border">
+            <button
+              onClick={() => setShowBatchDeleteConfirm(false)}
+              className="px-4 py-2 text-sm font-medium rounded-lg text-secondary hover:bg-surface-raised transition-colors"
+            >
+              {i18nService.t('cancel')}
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
+            >
+              {i18nService.t('batchDelete')} ({selectedIds.size})
+            </button>
+          </div>
+        </Modal>
       )}
     </aside>
   );
@@ -390,7 +412,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 const SidebarAgentList: React.FC<{
   onShowCowork: () => void;
-}> = ({ onShowCowork }) => {
+  onSessionsLoadingChange: (loading: boolean) => void;
+}> = ({ onShowCowork, onSessionsLoadingChange }) => {
   const agents = useSelector((state: RootState) => state.agent.agents);
   const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
 
@@ -398,34 +421,36 @@ const SidebarAgentList: React.FC<{
     agentService.loadAgents();
   }, []);
 
-  const enabledAgents = agents.filter((a) => a.enabled);
+  const enabledAgents = agents.filter(a => a.enabled);
 
-  // Hide section if only the default main agent exists
-  if (enabledAgents.length <= 1 && !enabledAgents.some((a) => a.source === 'preset')) {
-    return null;
-  }
-
-  const handleSwitch = (agentId: string) => {
+  const handleSwitch = async (agentId: string) => {
     if (agentId === currentAgentId) return;
     agentService.switchAgent(agentId);
-    coworkService.loadSessions(agentId);
     onShowCowork();
+    onSessionsLoadingChange(true);
+    try {
+      await coworkService.loadSessions(agentId);
+    } finally {
+      onSessionsLoadingChange(false);
+    }
   };
 
   return (
     <div className="px-3 pb-2">
       <div className="space-y-0.5">
-        {enabledAgents.map((agent) => (
+        {enabledAgents.map(agent => (
           <div
             key={agent.id}
             className={`group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm cursor-pointer transition-colors ${
               currentAgentId === agent.id
-                ? 'bg-claude-accent/10 text-claude-accent'
-                : 'dark:text-claude-darkTextSecondary text-claude-textSecondary hover:bg-claude-surfaceHover dark:hover:bg-claude-darkSurfaceHover'
+                ? 'bg-primary/10 text-primary'
+                : 'text-secondary hover:bg-surface-raised'
             }`}
             onClick={() => handleSwitch(agent.id)}
           >
-            <span className="text-base leading-none">{agent.icon || '🦞'}</span>
+            <span className="text-base leading-none">
+              {agent.icon || (agent.id === 'main' ? '🦞' : '🤖')}
+            </span>
             <span className="truncate flex-1 text-xs font-medium">{agent.name}</span>
           </div>
         ))}

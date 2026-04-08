@@ -1,18 +1,7 @@
 import { store } from '../store';
 import { configService } from './config';
 import { ChatMessagePayload, ChatUserMessageInput, ImageAttachment } from '../types/chat';
-
-const ZHIPU_CODING_PLAN_OPENAI_BASE_URL = 'https://open.bigmodel.cn/api/coding/paas/v4';
-const ZHIPU_CODING_PLAN_ANTHROPIC_BASE_URL = 'https://open.bigmodel.cn/api/anthropic';
-// Qwen Coding Plan 专属端点 (OpenAI 兼容和 Anthropic 兼容)
-const QWEN_CODING_PLAN_OPENAI_BASE_URL = 'https://coding.dashscope.aliyuncs.com/v1';
-const QWEN_CODING_PLAN_ANTHROPIC_BASE_URL = 'https://coding.dashscope.aliyuncs.com/apps/anthropic';
-// Volcengine Coding Plan 专属端点 (OpenAI 兼容和 Anthropic 兼容)
-const VOLCENGINE_CODING_PLAN_OPENAI_BASE_URL = 'https://ark.cn-beijing.volces.com/api/coding/v3';
-const VOLCENGINE_CODING_PLAN_ANTHROPIC_BASE_URL = 'https://ark.cn-beijing.volces.com/api/coding';
-// Moonshot Coding Plan 专属端点 (OpenAI 兼容和 Anthropic 兼容)
-const MOONSHOT_CODING_PLAN_OPENAI_BASE_URL = 'https://api.kimi.com/coding/v1';
-const MOONSHOT_CODING_PLAN_ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding';
+import { resolveCodingPlanBaseUrl } from '../../shared/providers';
 
 export interface ApiConfig {
   apiKey: string;
@@ -76,6 +65,7 @@ class ApiService {
     if (normalized.endsWith('/chat/completions')) {
       return normalized;
     }
+
 
     // Handle /v1, /v4 etc. versioned paths
     if (/\/v\d+$/.test(normalized)) {
@@ -252,7 +242,7 @@ class ApiService {
   }
 
   private providerRequiresApiKey(provider: string): boolean {
-    return provider !== 'ollama';
+    return provider !== 'ollama' && provider !== 'github-copilot';
   }
 
   // 检测当前选择的模型属于哪个 provider
@@ -260,7 +250,10 @@ class ApiService {
     const normalizedHint = providerHint?.toLowerCase();
     if (
       normalizedHint
-      && ['openai', 'deepseek', 'moonshot', 'zhipu', 'minimax', 'youdaozhiyun', 'qwen', 'openrouter', 'gemini', 'anthropic', 'xiaomi', 'stepfun', 'volcengine', 'ollama', 'custom'].includes(normalizedHint)
+      && (
+        ['openai', 'deepseek', 'moonshot', 'zhipu', 'minimax', 'youdaozhiyun', 'qwen', 'openrouter', 'gemini', 'anthropic', 'xiaomi', 'stepfun', 'volcengine', 'github-copilot', 'ollama'].includes(normalizedHint)
+        || normalizedHint.startsWith('custom_')
+      )
     ) {
       return normalizedHint;
     }
@@ -300,49 +293,11 @@ class ApiService {
       if (providerConfig.enabled && (providerConfig.apiKey || !this.providerRequiresApiKey(provider))) {
         let baseUrl = providerConfig.baseUrl;
         let apiFormat = this.normalizeApiFormat(providerConfig.apiFormat);
-        
-        // Handle Zhipu GLM Coding Plan endpoint switch
-        // Coding Plan supports both OpenAI and Anthropic compatible formats
-        if (provider === 'zhipu' && providerConfig.codingPlanEnabled) {
-          if (apiFormat === 'anthropic') {
-            baseUrl = ZHIPU_CODING_PLAN_ANTHROPIC_BASE_URL;
-          } else {
-            baseUrl = ZHIPU_CODING_PLAN_OPENAI_BASE_URL;
-            apiFormat = 'openai';
-          }
-        }
 
-        // Handle Qwen Coding Plan endpoint switch
-        // Coding Plan supports both OpenAI and Anthropic compatible formats
-        if (provider === 'qwen' && providerConfig.codingPlanEnabled) {
-          if (apiFormat === 'anthropic') {
-            baseUrl = QWEN_CODING_PLAN_ANTHROPIC_BASE_URL;
-          } else {
-            baseUrl = QWEN_CODING_PLAN_OPENAI_BASE_URL;
-            apiFormat = 'openai';
-          }
-        }
-
-        // Handle Volcengine Coding Plan endpoint switch
-        // Coding Plan supports both OpenAI and Anthropic compatible formats
-        if (provider === 'volcengine' && providerConfig.codingPlanEnabled) {
-          if (apiFormat === 'anthropic') {
-            baseUrl = VOLCENGINE_CODING_PLAN_ANTHROPIC_BASE_URL;
-          } else {
-            baseUrl = VOLCENGINE_CODING_PLAN_OPENAI_BASE_URL;
-            apiFormat = 'openai';
-          }
-        }
-
-        // Handle Moonshot Coding Plan endpoint switch
-        // Coding Plan supports both OpenAI and Anthropic compatible formats
-        if (provider === 'moonshot' && providerConfig.codingPlanEnabled) {
-          if (apiFormat === 'anthropic') {
-            baseUrl = MOONSHOT_CODING_PLAN_ANTHROPIC_BASE_URL;
-          } else {
-            baseUrl = MOONSHOT_CODING_PLAN_OPENAI_BASE_URL;
-            apiFormat = 'openai';
-          }
+        if (providerConfig.codingPlanEnabled && (apiFormat === 'anthropic' || apiFormat === 'openai')) {
+          const resolved = resolveCodingPlanBaseUrl(provider, true, apiFormat, baseUrl);
+          baseUrl = resolved.baseUrl;
+          apiFormat = resolved.effectiveFormat;
         }
         
         return {
@@ -402,7 +357,33 @@ class ApiService {
       return this.chatWithAnthropic(userMessage, onProgress, history, selectedModel.id, effectiveConfig, supportsImages);
     }
 
-    return this.chatWithOpenAICompatible(userMessage, onProgress, history, selectedModel.id, effectiveConfig, supportsImages, provider);
+    try {
+      return await this.chatWithOpenAICompatible(userMessage, onProgress, history, selectedModel.id, effectiveConfig, supportsImages, provider);
+    } catch (error) {
+      // Auto-retry once for GitHub Copilot auth errors (401 / token expired)
+      if (
+        provider === 'github-copilot'
+        && error instanceof ApiError
+        && (error.statusCode === 401 || error.statusCode === 403)
+      ) {
+        console.log('[api-chat] Copilot auth error detected, attempting token refresh and retry');
+        try {
+          const result = await window.electron.githubCopilot.refreshToken();
+          if (result.success && result.token) {
+            // Update local config with the refreshed token
+            const refreshedConfig: ApiConfig = {
+              ...effectiveConfig,
+              apiKey: result.token,
+              ...(result.baseUrl ? { baseUrl: result.baseUrl } : {}),
+            };
+            return await this.chatWithOpenAICompatible(userMessage, onProgress, history, selectedModel.id, refreshedConfig, supportsImages, provider);
+          }
+        } catch (refreshError) {
+          console.warn('[api-chat] Copilot token refresh failed, throwing original error:', refreshError);
+        }
+      }
+      throw error;
+    }
   }
 
   // Anthropic API 调用
@@ -899,6 +880,13 @@ class ApiService {
           } else {
             headers.Authorization = `Bearer ${config.apiKey}`;
           }
+        }
+        if (provider === 'github-copilot') {
+          headers['Copilot-Integration-Id'] = 'vscode-chat';
+          headers['Editor-Version'] = 'vscode/1.96.2';
+          headers['Editor-Plugin-Version'] = 'copilot-chat/0.26.7';
+          headers['User-Agent'] = 'GitHubCopilotChat/0.26.7';
+          headers['Openai-Intent'] = 'conversation-panel';
         }
 
         const requestUrl = useResponsesApi
