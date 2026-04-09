@@ -34,7 +34,7 @@
       {
         "id": "openclaw-weixin",
         "npm": "@tencent-weixin/openclaw-weixin",
-        "version": "2.1.6"
+        "version": "2.1.7"
       },
       {
         "id": "moltbot-popo",
