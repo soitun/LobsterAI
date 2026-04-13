@@ -1,14 +1,15 @@
-import { app } from 'electron';
+import Database from 'better-sqlite3';
 import crypto from 'crypto';
+import { app } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
+
 import {
+  type CoworkMemoryGuardLevel,
   extractTurnMemoryChanges,
   isQuestionLikeMemoryText,
-  type CoworkMemoryGuardLevel,
 } from './libs/coworkMemoryExtractor';
 import { judgeMemoryCandidate } from './libs/coworkMemoryJudge';
 
@@ -471,6 +472,7 @@ export interface CoworkConfig {
   memoryLlmJudgeEnabled: boolean;
   memoryGuardLevel: CoworkMemoryGuardLevel;
   memoryUserMemoriesMaxItems: number;
+  skipMissedJobs: boolean;
 }
 
 export type CoworkConfigUpdate = Partial<
@@ -484,6 +486,7 @@ export type CoworkConfigUpdate = Partial<
     | 'memoryLlmJudgeEnabled'
     | 'memoryGuardLevel'
     | 'memoryUserMemoriesMaxItems'
+    | 'skipMissedJobs'
   >
 >;
 
@@ -1123,6 +1126,7 @@ export class CoworkStore {
       'memoryLlmJudgeEnabled',
       'memoryGuardLevel',
       'memoryUserMemoriesMaxItems',
+      'skipMissedJobs',
     ] as const;
     const configRows = this.getAll<{ key: string; value: string }>(
       `SELECT key, value FROM cowork_config WHERE key IN (${configKeys.map(() => '?').join(', ')})`,
@@ -1148,6 +1152,7 @@ export class CoworkStore {
       memoryUserMemoriesMaxItems: clampMemoryUserMemoriesMaxItems(
         Number(cfg.get('memoryUserMemoriesMaxItems')),
       ),
+      skipMissedJobs: parseBooleanConfig(cfg.get('skipMissedJobs'), false),
     };
   }
 
@@ -1265,6 +1270,20 @@ export class CoworkStore {
       `,
         )
         .run(String(clampMemoryUserMemoriesMaxItems(config.memoryUserMemoriesMaxItems)), now);
+    }
+
+    if (config.skipMissedJobs !== undefined) {
+      this.db
+        .prepare(
+          `
+        INSERT INTO cowork_config (key, value, updated_at)
+        VALUES ('skipMissedJobs', ?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+          value = excluded.value,
+          updated_at = excluded.updated_at
+      `,
+        )
+        .run(config.skipMissedJobs ? '1' : '0', now);
     }
   }
 
@@ -2037,6 +2056,17 @@ export class CoworkStore {
     return this.getAgent(id)!;
   }
 
+  backfillEmptyAgentModels(modelId: string): number {
+    const normalizedModelId = modelId.trim();
+    if (!normalizedModelId) return 0;
+
+    const result = this.db
+      .prepare("UPDATE agents SET model = ?, updated_at = ? WHERE TRIM(COALESCE(model, '')) = ''")
+      .run(normalizedModelId, Date.now());
+
+    return result.changes;
+  }
+
   updateAgent(id: string, updates: UpdateAgentRequest): Agent | null {
     const existing = this.getAgent(id);
     if (!existing) return null;
@@ -2080,7 +2110,6 @@ export class CoworkStore {
 
     values.push(id);
     this.db.prepare(`UPDATE agents SET ${setClauses.join(', ')} WHERE id = ?`).run(...values);
-
     return this.getAgent(id);
   }
 
