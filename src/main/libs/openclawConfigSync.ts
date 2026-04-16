@@ -706,6 +706,7 @@ export type OpenClawConfigSyncResult = {
   error?: string;
   agentsMdWarning?: string;
   bindingsChanged?: boolean;
+  mcpBridgeConfigChanged?: boolean;
 };
 
 const buildStreamingModeConfig = (
@@ -1120,6 +1121,7 @@ export class OpenClawConfigSync {
     // Sync MCP Bridge config into the plugin's own config section
     // (root-level keys are rejected by OpenClaw's strict schema validation)
     const mcpBridgeCfg = this.getMcpBridgeConfig?.();
+    console.log(`[OpenClawConfigSync] getMcpBridgeConfig: callbackUrl=${mcpBridgeCfg?.callbackUrl ?? 'null'}, tools=${mcpBridgeCfg?.tools?.length ?? 0}`);
     if (hasMcpBridgePlugin && mcpBridgeCfg && mcpBridgeCfg.tools.length > 0 && managedConfig.plugins) {
       const plugins = managedConfig.plugins as Record<string, unknown>;
       const entries = plugins.entries as Record<string, Record<string, unknown>>;
@@ -1476,6 +1478,29 @@ export class OpenClawConfigSync {
 
     const configChanged = currentContent !== nextContent;
 
+    // Detect mcp-bridge config changes (callbackUrl, tools) separately.
+    // Even when the overall plugins section appears "UNCHANGED" in the
+    // diagnostic, the mcp-bridge sub-config may have changed — and that
+    // requires a hard gateway restart because the gateway pins its config
+    // snapshot at startup.
+    let mcpBridgeConfigChanged = false;
+    try {
+      const currentObj = currentContent ? JSON.parse(currentContent) : {};
+      const nextObj = JSON.parse(nextContent);
+      const curMcpBridge = currentObj?.plugins?.entries?.['mcp-bridge'];
+      const nxtMcpBridge = nextObj?.plugins?.entries?.['mcp-bridge'];
+      const curCallbackUrl = curMcpBridge?.config?.callbackUrl;
+      const nxtCallbackUrl = nxtMcpBridge?.config?.callbackUrl;
+      const curToolNames = (curMcpBridge?.config?.tools as Array<{ name?: string }> | undefined)
+        ?.map((t) => t.name).sort().join(',') ?? '';
+      const nxtToolNames = (nxtMcpBridge?.config?.tools as Array<{ name?: string }> | undefined)
+        ?.map((t) => t.name).sort().join(',') ?? '';
+      mcpBridgeConfigChanged = curCallbackUrl !== nxtCallbackUrl || curToolNames !== nxtToolNames;
+      if (mcpBridgeConfigChanged) {
+        console.log(`[GW-RESTART-DIAG] mcp-bridge config CHANGED: callbackUrl ${curCallbackUrl ?? 'null'} → ${nxtCallbackUrl ?? 'null'}, tools ${curToolNames.split(',').length} → ${nxtToolNames.split(',').length}`);
+      }
+    } catch { /* ignore parse errors */ }
+
     if (configChanged) {
       // Diagnostic: diff gateway and plugins sections to identify what triggers OpenClaw restart
       try {
@@ -1543,6 +1568,7 @@ export class OpenClawConfigSync {
       changed: configChanged || sessionStoreChanged,
       configPath,
       ...(bindingsChanged ? { bindingsChanged } : {}),
+      ...(mcpBridgeConfigChanged ? { mcpBridgeConfigChanged } : {}),
       ...(agentsMdWarning ? { agentsMdWarning } : {}),
     };
   }

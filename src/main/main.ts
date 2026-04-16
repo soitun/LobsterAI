@@ -1106,7 +1106,7 @@ const scheduleDeferredGatewayRestart = (reason: string) => {
 
 const syncOpenClawConfig = async (
   options: { reason: string; restartGatewayIfRunning?: boolean } = { reason: 'unknown' },
-): Promise<{ success: boolean; changed: boolean; status?: OpenClawEngineStatus; error?: string }> => {
+): Promise<{ success: boolean; changed: boolean; mcpBridgeConfigChanged?: boolean; status?: OpenClawEngineStatus; error?: string }> => {
   const D = '[GW-RESTART-DIAG]';
   console.log(`${D} ──── syncOpenClawConfig START reason=${options.reason} restartIfRunning=${!!options.restartGatewayIfRunning}`);
 
@@ -1160,15 +1160,21 @@ const syncOpenClawConfig = async (
     console.log(`${D} secretEnvVars unchanged (${Object.keys(nextSecretEnvVars).length} keys)`);
   }
 
-  const needsHardRestart = secretEnvVarsChanged || syncResult.bindingsChanged || (syncResult.changed && options.restartGatewayIfRunning);
+  // Force a hard restart when the mcp-bridge callbackUrl or tools changed,
+  // regardless of the restartGatewayIfRunning flag.  The OpenClaw gateway
+  // pins its config snapshot at startup, so a hot-reload alone won't pick
+  // up a new callbackUrl — the gateway must be fully restarted.
+  const mcpBridgeForceRestart = !!syncResult.mcpBridgeConfigChanged;
+  const needsHardRestart = secretEnvVarsChanged || syncResult.bindingsChanged || mcpBridgeForceRestart || (syncResult.changed && options.restartGatewayIfRunning);
 
-  console.log(`${D} needsHardRestart=${needsHardRestart} (envChanged=${secretEnvVarsChanged} bindingsChanged=${!!syncResult.bindingsChanged} configChanged=${syncResult.changed} restartFlag=${!!options.restartGatewayIfRunning})`);
+  console.log(`${D} needsHardRestart=${needsHardRestart} (envChanged=${secretEnvVarsChanged} bindingsChanged=${!!syncResult.bindingsChanged} mcpBridgeChanged=${mcpBridgeForceRestart} configChanged=${syncResult.changed} restartFlag=${!!options.restartGatewayIfRunning})`);
 
   if (!needsHardRestart) {
     console.log(`${D} ──── NO RESTART, hot-reload only. reason=${options.reason}`);
     return {
       success: true,
       changed: syncResult.changed,
+      mcpBridgeConfigChanged: syncResult.mcpBridgeConfigChanged,
     };
   }
 
@@ -1494,8 +1500,9 @@ const refreshMcpBridge = (): Promise<{ tools: number; error?: string }> => {
       const toolCount = bridgeConfig?.tools.length ?? 0;
       console.log(`[McpBridge] refresh: ${toolCount} tools discovered`);
 
-      // 3. Sync openclaw.json — OpenClaw's file watcher will hot-reload;
-      // hard restart only happens when secret env vars change.
+      // 3. Sync openclaw.json — the gateway will hard-restart when the
+      // mcp-bridge callbackUrl or tools change, ensuring the gateway picks
+      // up the new config (it pins a snapshot at startup).
       const syncResult = await syncOpenClawConfig({
         reason: 'mcp-server-changed',
       });
@@ -1504,7 +1511,7 @@ const refreshMcpBridge = (): Promise<{ tools: number; error?: string }> => {
         return { tools: toolCount, error: syncResult.error };
       }
 
-      console.log(`[McpBridge] refresh complete: ${toolCount} tools, gateway restarted=${syncResult.changed}`);
+      console.log(`[McpBridge] refresh complete: ${toolCount} tools, configChanged=${syncResult.changed}, mcpBridgeChanged=${!!syncResult.mcpBridgeConfigChanged}`);
       return { tools: toolCount };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
