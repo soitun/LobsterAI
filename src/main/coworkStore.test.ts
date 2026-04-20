@@ -42,6 +42,7 @@ function setupDb(): void {
       pinned INTEGER NOT NULL DEFAULT 0,
       cwd TEXT NOT NULL,
       system_prompt TEXT NOT NULL DEFAULT '',
+      model_override TEXT NOT NULL DEFAULT '',
       execution_mode TEXT NOT NULL DEFAULT 'local',
       active_skill_ids TEXT,
       agent_id TEXT NOT NULL DEFAULT 'main',
