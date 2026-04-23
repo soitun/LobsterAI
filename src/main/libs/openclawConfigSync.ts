@@ -1106,9 +1106,7 @@ export class OpenClawConfigSync {
                 },
               },
             },
-          } : {
-            memorySearch: { enabled: false },
-          }),
+          } : {}),
         },
         ...this.buildAgentsList(primaryModel, this.engineManager.getStateDir()),
       },
