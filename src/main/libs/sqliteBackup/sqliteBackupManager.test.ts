@@ -72,10 +72,10 @@ test('retainLatestSnapshots keeps only the newest successful snapshot', () => {
 test('buildBackupPaths creates manifest snapshots and quarantine locations under userData', () => {
   const userDataPath = '/tmp/lobsterai-user-data';
   const paths = buildSqliteBackupPaths(userDataPath);
-  expect(paths.backupDir).toContain('backups/sqlite');
-  expect(paths.snapshotsDir).toContain('backups/sqlite/snapshots');
-  expect(paths.quarantineDir).toContain('backups/sqlite/quarantine');
-  expect(paths.manifestPath).toContain('backups/sqlite/manifest.json');
+  expect(paths.backupDir).toContain(path.join('backups', 'sqlite'));
+  expect(paths.snapshotsDir).toContain(path.join('backups', 'sqlite', 'snapshots'));
+  expect(paths.quarantineDir).toContain(path.join('backups', 'sqlite', 'quarantine'));
+  expect(paths.manifestPath).toContain(path.join('backups', 'sqlite', 'manifest.json'));
 });
 
 test('createBackup writes a snapshot and a manifest record', async () => {
@@ -161,6 +161,8 @@ test('shouldCreatePeriodicBackup returns true only when the latest snapshot is o
 
   const paths = manager.getPaths();
   fs.mkdirSync(paths.backupDir, { recursive: true });
+  fs.mkdirSync(paths.snapshotsDir, { recursive: true });
+  fs.writeFileSync(path.join(paths.snapshotsDir, SQLITE_BACKUP_FILE_NAME), '');
   fs.writeFileSync(
     paths.manifestPath,
     JSON.stringify({

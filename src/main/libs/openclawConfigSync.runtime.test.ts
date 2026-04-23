@@ -82,9 +82,11 @@ describe('OpenClawConfigSync runtime config output', () => {
         skipMissedJobs: false,
       }),
       isEnterprise: () => false,
-      getTelegramOpenClawConfig: () => ({
+      getTelegramInstances: () => [{
         enabled: true,
         botToken: 'tg-token',
+        instanceId: 'tg-inst-001',
+        instanceName: 'Test Telegram',
         dmPolicy: 'open',
         allowFrom: ['*'],
         groupPolicy: 'allowlist',
@@ -99,7 +101,7 @@ describe('OpenClawConfigSync runtime config output', () => {
         webhookUrl: '',
         webhookSecret: '',
         debug: false,
-      }),
+      }],
       getDiscordOpenClawConfig: () => null,
       getDingTalkInstances: () => [],
       getFeishuInstances: () => [],
@@ -119,7 +121,9 @@ describe('OpenClawConfigSync runtime config output', () => {
     expect(result.ok).toBe(true);
 
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    expect(config.channels.telegram.streaming).toEqual({ mode: 'off' });
+    const accounts = config.channels.telegram.accounts;
+    const accountKey = Object.keys(accounts)[0];
+    expect(accounts[accountKey].streaming).toEqual({ mode: 'off' });
   });
 
   test('does not inject unsupported _agentBinding channel metadata and requests restart when bindings change', async () => {
