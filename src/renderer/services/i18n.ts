@@ -539,7 +539,6 @@ const translations: Record<LanguageType, Record<string, string>> = {
     agentIdentity: '身份',
     agentIdentityPlaceholder: '身份描述（IDENTITY.md）...',
     agentDefaultModel: 'Agent 默认模型',
-    agentModelOpenClawOnly: '仅 OpenClaw 引擎使用此设置',
     agentModelInvalidHint: '当前模型已不可用，请重新选择',
     agentSkills: '技能',
     agentSkillsHint: '选择该 Agent 可使用的技能。不选则使用所有已启用技能。',
@@ -2097,7 +2096,6 @@ const translations: Record<LanguageType, Record<string, string>> = {
     agentIdentity: 'Identity',
     agentIdentityPlaceholder: 'Identity description (IDENTITY.md)...',
     agentDefaultModel: 'Agent Default Model',
-    agentModelOpenClawOnly: 'This setting only applies to the OpenClaw engine',
     agentModelInvalidHint: 'Model unavailable. Please select another',
     agentSkills: 'Skills',
     agentSkillsHint:
