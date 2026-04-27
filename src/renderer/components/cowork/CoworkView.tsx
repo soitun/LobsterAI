@@ -182,6 +182,11 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
   }, [dispatch]);
 
   const handleStartSession = async (prompt: string, skillPrompt?: string, imageAttachments?: CoworkImageAttachment[]): Promise<boolean | void> => {
+    console.log('[CoworkView] handleStartSession: imageAttachments diagnosis', {
+      hasImageAttachments: !!imageAttachments,
+      count: imageAttachments?.length ?? 0,
+      details: imageAttachments?.map(a => ({ name: a.name, mimeType: a.mimeType, base64Length: a.base64Data?.length ?? 0 })) ?? [],
+    });
     if (isOpenClawEngine && openClawStatus && !isOpenClawReadyForSession(openClawStatus)) {
       window.dispatchEvent(new CustomEvent('app:showToast', { detail: i18nService.t('coworkErrorEngineNotReady') }));
       return false;
@@ -236,6 +241,7 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
         updatedAt: now,
         cwd: config.workingDirectory || '',
         systemPrompt: '',
+        modelOverride: '',
         executionMode: config.executionMode || 'local',
         activeSkillIds: sessionSkillIds,
         agentId: currentAgentId,
@@ -435,17 +441,19 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
 
   useEffect(() => {
     const handleNewSession = () => {
+      // Only clear when already on home (no session) — preserve __home__ draft when returning from a session
+      const shouldClear = !currentSession;
       dispatch(clearCurrentSession());
       dispatch(clearSelection());
       window.dispatchEvent(new CustomEvent('cowork:focus-input', {
-        detail: { clear: true },
+        detail: { clear: shouldClear },
       }));
     };
     window.addEventListener('cowork:shortcut:new-session', handleNewSession);
     return () => {
       window.removeEventListener('cowork:shortcut:new-session', handleNewSession);
     };
-  }, [dispatch]);
+  }, [dispatch, currentSession]);
 
   useEffect(() => {
     if (!isOpenClawEngine) return;
@@ -584,7 +592,7 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="max-w-3xl mx-auto px-4 py-16 space-y-12">
+        <div className="max-w-5xl w-full min-w-[320px] mx-auto px-4 pt-[15vh] pb-8 space-y-10">
           {/* Welcome Section */}
           <div className="text-center space-y-5">
             <img src="logo.png" alt="logo" className="w-16 h-16 mx-auto" />
@@ -597,7 +605,7 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
           </div>
 
           {/* Prompt Input Area - Large version with folder selector */}
-          <div className="space-y-3">
+          <div className="max-w-3xl mx-auto w-full space-y-3">
             <div className="shadow-glow-accent rounded-2xl">
               <CoworkPromptInput
                 ref={promptInputRef}
@@ -618,7 +626,7 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
           </div>
 
           {/* Quick Actions */}
-          <div className="space-y-4">
+          <div className="max-w-3xl mx-auto w-full space-y-4">
             {selectedAction ? (
               <PromptPanel
                 action={selectedAction}
