@@ -122,32 +122,38 @@ const App: React.FC = () => {
     hasInitialized.current = true;
 
     const initializeApp = async () => {
+      const t0 = performance.now();
+      const mark = (label: string) => {
+        const elapsed = Math.round(performance.now() - t0);
+        const msg = `initializeApp: ${label} (+${elapsed}ms)`;
+        console.info(`[App] ${msg}`);
+        try { window.electron?.log?.fromRenderer?.('info', 'App', msg); } catch { /* preload may not expose this yet */ }
+      };
+
       try {
-        console.info('[App] initializeApp: start');
-        // 标记平台，用于 CSS 条件样式（如 Windows 标题栏按钮区域留白）
+        mark('start');
         document.documentElement.classList.add(`platform-${window.electron.platform}`);
 
-        // 初始化配置
-        console.info('[App] initializeApp: configService.init');
-        await waitWithTimeout(configService.init(), 5000, 'configService.init');
+        const initTimeoutMs = window.electron.platform === 'win32' ? 15_000 : 10_000;
+        mark('configService.init begin');
+        await waitWithTimeout(configService.init(), initTimeoutMs, 'configService.init');
+        mark('configService.init done');
 
-        // Load enterprise config if present
         const entConfig = await window.electron.enterprise.getConfig();
         setEnterpriseConfig(entConfig);
+        mark('enterprise.getConfig done');
 
-        // 初始化主题
-        console.info('[App] initializeApp: themeService.initialize');
         themeService.initialize();
+        mark('themeService done');
 
-        // 初始化语言
-        console.info('[App] initializeApp: i18nService.initialize');
-        await waitWithTimeout(i18nService.initialize(), 5000, 'i18nService.initialize');
+        mark('i18nService.initialize begin');
+        await waitWithTimeout(i18nService.initialize(), initTimeoutMs, 'i18nService.initialize');
+        mark('i18nService.initialize done');
 
-        // 初始化认证服务（恢复登录状态）
-        console.info('[App] initializeApp: authService.init');
+        mark('authService.init begin');
         await authService.init();
+        mark('authService.init done');
 
-        console.info('[App] initializeApp: configService.getConfig');
         const config = await configService.getConfig();
         const apiConfig: ApiConfig = {
           apiKey: config.api.key,
@@ -155,7 +161,6 @@ const App: React.FC = () => {
         };
         apiService.setConfig(apiConfig);
 
-        // 从 providers 配置中加载可用模型列表到 Redux
         const providerModels: { id: string; name: string; provider?: string; providerKey?: string; openClawProviderId?: string; supportsImage?: boolean }[] = [];
         if (config.providers) {
           Object.entries(config.providers).forEach(([providerName, providerConfig]) => {
@@ -183,8 +188,6 @@ const App: React.FC = () => {
         const resolvedModels = providerModels.length > 0 ? providerModels : fallbackModels;
         if (resolvedModels.length > 0) {
           dispatch(setAvailableModels(resolvedModels));
-          // Search all available models (including server models loaded by authService)
-          // so that a previously selected server model is correctly restored.
           const allModels = store.getState().model.availableModels;
           const preferredModel = allModels.find(
             model => model.id === config.model.defaultModel
@@ -192,22 +195,25 @@ const App: React.FC = () => {
           ) ?? allModels[0];
           dispatch(setSelectedModel(preferredModel));
         }
+        mark('model resolution done');
 
-        // 检查隐私协议是否已同意（必须在 setIsInitialized 之前）
         const agreed = await window.electron.store.get('privacy_agreed');
         setPrivacyAgreed(agreed === true);
+        mark('privacy check done');
 
         setIsInitialized(true);
-        console.info('[App] initializeApp: shell ready');
+        mark('shell ready');
 
-
-        // 初始化定时任务服务，但不阻塞首屏
         void waitWithTimeout(scheduledTaskService.init(), 5000, 'scheduledTaskService.init').catch((error) => {
           console.error('[App] initializeApp: scheduledTaskService.init failed:', error);
         });
 
       } catch (error) {
-        console.error('Failed to initialize app:', error);
+        const elapsed = Math.round(performance.now() - t0);
+        const msg = error instanceof Error ? error.message : String(error);
+        const detail = `initializeApp FAILED after ${elapsed}ms: ${msg}`;
+        console.error(`[App] ${detail}`);
+        try { window.electron?.log?.fromRenderer?.('error', 'App', detail); } catch { /* best-effort */ }
         setInitError(i18nService.t('initializationError'));
         setIsInitialized(true);
       }

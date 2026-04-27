@@ -453,6 +453,7 @@ interface IElectronAPI {
       missingEntries?: string[];
       error?: string;
     }>;
+    fromRenderer: (level: string, tag: string, message: string) => void;
   };
   im: {
     getConfig: () => Promise<{ success: boolean; config?: IMGatewayConfig; error?: string }>;

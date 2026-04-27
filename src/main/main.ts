@@ -1967,6 +1967,11 @@ if (!gotTheLock) {
     }
   };
 
+  ipcMain.on('log:fromRenderer', (_event, level: string, tag: string, message: string) => {
+    const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+    fn(`[Renderer][${tag}] ${message}`);
+  });
+
   // Allow renderer to retrieve a buffered auth code on init
   ipcMain.handle('auth:getPendingCallback', () => {
     const code = pendingAuthCode;
