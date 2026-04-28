@@ -26,7 +26,6 @@ import ModelSelector from '../ModelSelector';
 import { PromptPanel,QuickActionBar } from '../quick-actions';
 import type { SettingsOpenOptions } from '../Settings';
 import WindowTitleBar from '../window/WindowTitleBar';
-import { resolveAgentModelSelection } from './agentModelSelection';
 import CoworkPromptInput, { type CoworkPromptInputRef } from './CoworkPromptInput';
 import CoworkSessionDetail from './CoworkSessionDetail';
 
@@ -69,17 +68,8 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
   const selectedActionId = useSelector((state: RootState) => state.quickAction.selectedActionId);
   const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
   const agents = useSelector((state: RootState) => state.agent.agents);
-  const availableModels = useSelector((state: RootState) => state.model.availableModels);
   const globalSelectedModel = useSelector((state: RootState) => state.model.selectedModel);
   const currentAgent = agents.find((agent) => agent.id === currentAgentId);
-  const {
-    selectedModel: headerSelectedModel,
-  } = resolveAgentModelSelection({
-    agentModel: currentAgent?.model ?? '',
-    availableModels,
-    fallbackModel: globalSelectedModel,
-    engine: config.agentEngine,
-  });
 
   const buildApiConfigNotice = (error?: string): { noticeI18nKey: string; noticeExtra?: string } => {
     const key = 'coworkModelSettingsRequired';
