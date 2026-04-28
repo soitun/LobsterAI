@@ -120,10 +120,11 @@ interface ProviderDefInput {
    * Coding Plan dedicated endpoints (only for codingPlanSupported=true providers).
    * openai: OpenAI-compatible format endpoint
    * anthropic: Anthropic-compatible format endpoint
+   * Either field may be omitted for providers that only support one protocol.
    */
   readonly codingPlanUrls?: {
-    readonly openai: string;
-    readonly anthropic: string;
+    readonly openai?: string;
+    readonly anthropic?: string;
   };
   /**
    * When set, resolveCodingPlanBaseUrl will use this format (and its URL) regardless
@@ -354,7 +355,11 @@ const PROVIDER_DEFINITIONS = [
     openClawProviderId: OpenClawProviderId.Qianfan,
     defaultBaseUrl: 'https://qianfan.baidubce.com/v2',
     defaultApiFormat: ApiFormat.OpenAI,
-    codingPlanSupported: false,
+    codingPlanSupported: true,
+    codingPlanUrls: {
+      openai: 'https://qianfan.baidubce.com/v2/coding/chat/completions',
+    },
+    preferredCodingPlanFormat: 'openai',
     region: 'china',
     enPriority: 0,
     defaultModels: [
@@ -543,8 +548,8 @@ export interface ProviderDef {
   readonly codingPlanSupported: boolean;
   /** Coding Plan dedicated endpoints */
   readonly codingPlanUrls?: {
-    readonly openai: string;
-    readonly anthropic: string;
+    readonly openai?: string;
+    readonly anthropic?: string;
   };
   /** When set, overrides caller's apiFormat for coding plan URL resolution. */
   readonly preferredCodingPlanFormat?: 'openai' | 'anthropic';

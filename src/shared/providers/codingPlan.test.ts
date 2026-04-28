@@ -70,4 +70,12 @@ describe('resolveCodingPlanBaseUrl', () => {
       expect(result.effectiveFormat).toBe('openai');
     });
   });
+
+  describe('Qianfan — preferredCodingPlanFormat=openai', () => {
+    test('returns openai coding plan URL with chat/completions suffix', () => {
+      const result = resolveCodingPlanBaseUrl(ProviderName.Qianfan, true, 'openai', '');
+      expect(result.baseUrl).toBe('https://qianfan.baidubce.com/v2/coding/chat/completions');
+      expect(result.effectiveFormat).toBe('openai');
+    });
+  });
 });
