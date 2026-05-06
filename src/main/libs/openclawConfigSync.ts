@@ -817,30 +817,6 @@ export const buildProviderSelection = (options: {
   };
 };
 
-const buildOpenAICodexSystemProxyModelOverrides = (
-  providers: Record<string, OpenClawProviderSelection['providerConfig']>,
-): Record<string, { params: { transport: 'sse' } }> => {
-  if (!isSystemProxyEnabled()) {
-    return {};
-  }
-
-  const codexProvider = providers[OpenClawProviderId.OpenAICodex];
-  if (!codexProvider) {
-    return {};
-  }
-
-  const overrides: Record<string, { params: { transport: 'sse' } }> = {};
-  for (const model of codexProvider.models) {
-    if (!model.id?.trim()) {
-      continue;
-    }
-    overrides[`${OpenClawProviderId.OpenAICodex}/${model.id.trim()}`] = {
-      params: { transport: 'sse' },
-    };
-  }
-  return overrides;
-};
-
 const buildProviderModelCatalog = (
   providers: Record<string, OpenClawProviderSelection['providerConfig']>,
 ): Record<string, { models: Array<{ id: string }> }> => Object.fromEntries(
@@ -1202,7 +1178,6 @@ export class OpenClawConfigSync {
       this.isEnterprise(),
     );
     const availableProviders = buildProviderModelCatalog(allProvidersMap);
-    const defaultModelOverrides = buildOpenAICodexSystemProxyModelOverrides(allProvidersMap);
     console.log(
       `[OpenClawConfigSync] sandbox mode: ${sandboxMode} (executionMode: ${coworkConfig.executionMode || 'local'}, enterprise: ${this.isEnterprise()})`,
     );
@@ -1309,7 +1284,6 @@ export class OpenClawConfigSync {
           model: {
             primary: primaryModel,
           },
-          ...(Object.keys(defaultModelOverrides).length > 0 ? { models: defaultModelOverrides } : {}),
           sandbox: {
             mode: sandboxMode,
           },
