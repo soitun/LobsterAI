@@ -1883,6 +1883,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
     } catch (err) {
       console.error('[ArtifactDetection] failed:', err);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- uses messagesLength as stable proxy for currentSession.messages
   }, [sessionId, messagesLength, isStreaming, dispatch]);
 
   // Intercept clicks on artifact-compatible file links → open in panel
