@@ -25,6 +25,7 @@ import { setActiveSkillIds } from '../../store/slices/skillSlice';
 import type { CoworkImageAttachment,CoworkMessage, CoworkMessageMetadata } from '../../types/cowork';
 import type { Skill } from '../../types/skill';
 import { getCompactFolderName } from '../../utils/path';
+import { formatTokenCount } from '../../utils/tokenFormat';
 import { parseUserMessageForDisplay } from '../../utils/userMessageDisplay';
 import Modal from '../common/Modal';
 import ComposeIcon from '../icons/ComposeIcon';
@@ -40,7 +41,6 @@ import WindowTitleBar from '../window/WindowTitleBar';
 import CoworkPromptInput, { type CoworkPromptInputRef } from './CoworkPromptInput';
 import DiffView, { extractDiffFromToolInput } from './DiffView';
 import LazyRenderTurn, { clearHeightCache } from './LazyRenderTurn';
-
 interface CoworkSessionDetailProps {
   onManageSkills?: () => void;
   onContinue: (prompt: string, skillPrompt?: string, imageAttachments?: CoworkImageAttachment[]) => boolean | void | Promise<boolean | void>;
@@ -1437,6 +1437,43 @@ const ThinkingBlock: React.FC<{
   );
 };
 
+const MessageMetadataFooter: React.FC<{ turn: ConversationTurn }> = ({ turn }) => {
+  const finalMsg = [...turn.assistantItems]
+    .reverse()
+    .find(item => item.type === 'assistant' && item.message.metadata?.isFinal && item.message.metadata?.usage);
+  if (!finalMsg || finalMsg.type !== 'assistant') return null;
+  const meta = finalMsg.message.metadata;
+  const usage = meta?.usage;
+  if (!usage) return null;
+
+  const parts: Array<{ key: string; text: string; className?: string }> = [];
+  if (usage.inputTokens != null) {
+    parts.push({ key: 'in', text: `↑${formatTokenCount(usage.inputTokens)}` });
+  }
+  if (usage.outputTokens != null) {
+    parts.push({ key: 'out', text: `↓${formatTokenCount(usage.outputTokens)}` });
+  }
+  if (meta?.contextPercent != null) {
+    const pct = meta.contextPercent;
+    const cls = pct >= 90 ? 'text-red-400' : pct >= 75 ? 'text-amber-400' : '';
+    parts.push({ key: 'ctx', text: `${pct}% ctx`, className: cls });
+  }
+  if (meta?.model) {
+    const shortModel = meta.model.includes('/') ? meta.model.split('/').pop()! : meta.model;
+    parts.push({ key: 'model', text: shortModel });
+  }
+
+  if (parts.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-2 mt-1 text-[11px] text-zinc-400 dark:text-zinc-500 select-none">
+      {parts.map(p => (
+        <span key={p.key} className={p.className}>{p.text}</span>
+      ))}
+    </div>
+  );
+};
+
 export const AssistantTurnBlock: React.FC<{
   turn: ConversationTurn;
   resolveLocalFilePath?: (href: string, text: string) => string | null;
@@ -1592,6 +1629,7 @@ export const AssistantTurnBlock: React.FC<{
               );
             })}
             {showTypingIndicator && <TypingDots />}
+            <MessageMetadataFooter turn={turn} />
           </div>
         </div>
       </div>

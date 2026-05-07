@@ -347,6 +347,14 @@ export interface CoworkMessageMetadata {
   isStreaming?: boolean;
   isFinal?: boolean;
   skillIds?: string[];
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  };
+  contextPercent?: number;
+  model?: string;
   [key: string]: unknown;
 }
 

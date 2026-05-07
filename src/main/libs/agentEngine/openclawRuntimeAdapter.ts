@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import type { OpenClawSessionPatch } from '../../../common/openclawSession';
-import type { CoworkExecutionMode, CoworkMessage, CoworkSession, CoworkSessionStatus, CoworkStore } from '../../coworkStore';
+import type { CoworkExecutionMode, CoworkMessage, CoworkMessageMetadata, CoworkSession, CoworkSessionStatus, CoworkStore } from '../../coworkStore';
 import { t } from '../../i18n';
 import { getCommandDangerLevel,isDeleteCommand } from '../commandSafety';
 import { setCoworkProxySessionId } from '../coworkOpenAICompatProxy';
@@ -3420,6 +3420,11 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
       }
     }
 
+    // Fetch usage metadata from chat.history (fire-and-forget for managed sessions)
+    if (turn.assistantMessageId && turn.sessionKey && isManagedSessionKey(turn.sessionKey)) {
+      void this.syncUsageMetadata(sessionId, turn.sessionKey, turn.assistantMessageId);
+    }
+
     this.store.updateSession(sessionId, { status: 'completed' });
     this.emit('complete', sessionId, payload.runId ?? turn.runId);
     this.cleanupSessionTurn(sessionId);
@@ -3451,6 +3456,93 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
     this.cleanupSessionTurn(sessionId);
     this.resolveTurn(sessionId);
     void this.reconcileWithHistory(sessionId, abortedSessionKey);
+  }
+
+  /**
+   * Fetch the last assistant message from chat.history to extract usage metadata
+   * (inputTokens, outputTokens, contextPercent, model) and update the local message.
+   */
+  private async syncUsageMetadata(
+    sessionId: string,
+    sessionKey: string,
+    assistantMessageId: string,
+  ): Promise<void> {
+    const client = this.gatewayClient;
+    if (!client) return;
+
+    try {
+      const history = await client.request<{ messages?: unknown[] }>('chat.history', {
+        sessionKey,
+        limit: 10,
+      }, { timeoutMs: 8_000 });
+
+      if (!Array.isArray(history?.messages) || history.messages.length === 0) return;
+
+      // Find the last assistant message with usage data (search backwards)
+      let usageMsg: Record<string, unknown> | null = null;
+      for (let i = history.messages.length - 1; i >= 0; i--) {
+        const msg = history.messages[i];
+        if (isRecord(msg) && msg.role === 'assistant' && isRecord(msg.usage)) {
+          usageMsg = msg as Record<string, unknown>;
+          break;
+        }
+      }
+      if (!usageMsg) return;
+
+      const usage = usageMsg.usage as Record<string, number>;
+      const inputTokens = usage.input ?? usage.inputTokens ?? undefined;
+      const outputTokens = usage.output ?? usage.outputTokens ?? undefined;
+      const model = typeof usageMsg.model === 'string' ? usageMsg.model : undefined;
+
+      // Compute contextPercent from session info if available
+      let contextPercent: number | undefined;
+      try {
+        const previewResult = await client.request<{ sessions?: unknown[] }>('sessions.preview', {
+          keys: [sessionKey],
+        }, { timeoutMs: 5_000 });
+        const sessions = (previewResult as Record<string, unknown>)?.sessions;
+        if (Array.isArray(sessions) && sessions.length > 0) {
+          const sessionRow = sessions[0] as Record<string, unknown>;
+          const contextTokens = typeof sessionRow?.contextTokens === 'number'
+            ? sessionRow.contextTokens : undefined;
+          if (typeof inputTokens === 'number' && contextTokens && contextTokens > 0) {
+            contextPercent = Math.min(Math.round((inputTokens / contextTokens) * 100), 100);
+          }
+        }
+      } catch {
+        // contextPercent unavailable is acceptable
+      }
+
+      if (inputTokens == null && outputTokens == null && !model) return;
+
+      const usageMetadata: Record<string, unknown> = {
+        isStreaming: false,
+        isFinal: true,
+        ...(inputTokens != null || outputTokens != null ? {
+          usage: {
+            ...(inputTokens != null && { inputTokens }),
+            ...(outputTokens != null && { outputTokens }),
+          },
+        } : {}),
+        ...(contextPercent != null && { contextPercent }),
+        ...(model && { model }),
+      };
+
+      this.store.updateMessage(sessionId, assistantMessageId, {
+        metadata: usageMetadata as CoworkMessageMetadata,
+      });
+
+      // Notify renderer to re-render the message with usage data
+      const session = this.store.getSession(sessionId);
+      if (session) {
+        const msg = session.messages.find(m => m.id === assistantMessageId);
+        if (msg) {
+          this.emit('messageUpdate', sessionId, assistantMessageId, msg.content);
+        }
+      }
+    } catch (error) {
+      console.debug('[OpenClawRuntime] syncUsageMetadata failed:', error);
+    }
   }
 
   private handleChatError(sessionId: string, turn: ActiveTurn, payload: ChatEventPayload): void {
