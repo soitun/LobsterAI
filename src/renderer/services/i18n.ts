@@ -542,6 +542,8 @@ const translations: Record<LanguageType, Record<string, string>> = {
     agentIdentity: '身份',
     agentIdentityPlaceholder: '身份描述（IDENTITY.md）...',
     agentDefaultModel: 'Agent 默认模型',
+    agentDefaultWorkingDirectory: 'Agent 默认工作目录',
+    agentDefaultWorkingDirectoryHint: '新建会话默认在此目录执行',
     agentModelInvalidHint: '当前模型已不可用，请重新选择',
     agentSkills: '技能',
     agentSkillsHint: '选择该 Agent 可使用的技能。不选则使用所有已启用技能。',
@@ -2109,6 +2111,8 @@ const translations: Record<LanguageType, Record<string, string>> = {
     agentIdentity: 'Identity',
     agentIdentityPlaceholder: 'Identity description (IDENTITY.md)...',
     agentDefaultModel: 'Agent Default Model',
+    agentDefaultWorkingDirectory: 'Agent Default Working Directory',
+    agentDefaultWorkingDirectoryHint: 'New sessions run in this directory by default',
     agentModelInvalidHint: 'Model unavailable. Please select another',
     agentSkills: 'Skills',
     agentSkillsHint:

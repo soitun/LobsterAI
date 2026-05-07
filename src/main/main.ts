@@ -1010,6 +1010,19 @@ const getAgentManager = () => {
   return agentManager;
 };
 
+const resolveAgentDefaultWorkingDirectory = (agentId?: string): string => {
+  const resolvedAgentId = agentId?.trim() || 'main';
+  const agentWorkingDirectory = getAgentManager().getAgent(resolvedAgentId)?.workingDirectory?.trim();
+  if (agentWorkingDirectory) return agentWorkingDirectory;
+  return getCoworkStore().getConfig().workingDirectory.trim();
+};
+
+const resolveSessionWorkingDirectory = (options: { cwd?: string; agentId?: string }): string => {
+  const explicitWorkingDirectory = options.cwd?.trim();
+  if (explicitWorkingDirectory) return explicitWorkingDirectory;
+  return resolveAgentDefaultWorkingDirectory(options.agentId);
+};
+
 const isLobsteraiServerModelRef = (modelRef: string): boolean => {
   const normalized = modelRef.trim();
   if (!normalized) return false;
@@ -1418,7 +1431,7 @@ const getCoworkEngineRouter = () => {
           const channelSessionSync = new OpenClawChannelSessionSync({
             coworkStore: getCoworkStore(),
             imStore,
-            getDefaultCwd: () => getCoworkStore().getConfig().workingDirectory || os.homedir(),
+            getDefaultCwd: (agentId?: string) => resolveAgentDefaultWorkingDirectory(agentId) || os.homedir(),
             resolveJobName: (jobId) => getCronJobService().getJobNameSync(jobId),
           });
           openClawRuntimeAdapter.setChannelSessionSync(channelSessionSync);
@@ -2812,9 +2825,12 @@ if (!gotTheLock) {
       const systemPrompt = mergeCoworkSystemPrompt(
         options.systemPrompt ?? config.systemPrompt,
       );
-      const selectedWorkspaceRoot = (options.cwd || config.workingDirectory || '').trim();
+      const selectedTaskDirectory = resolveSessionWorkingDirectory({
+        cwd: options.cwd,
+        agentId: options.agentId,
+      });
 
-      if (!selectedWorkspaceRoot) {
+      if (!selectedTaskDirectory) {
         return {
           success: false,
           error: 'Please select a task folder before submitting.',
@@ -2826,7 +2842,7 @@ if (!gotTheLock) {
         t('coworkDefaultSessionTitle')
       );
       const title = options.title?.trim() || fallbackTitle;
-      const taskWorkingDirectory = resolveTaskWorkingDirectory(selectedWorkspaceRoot);
+      const taskWorkingDirectory = resolveTaskWorkingDirectory(selectedTaskDirectory);
 
       const session = coworkStoreInstance.createSession(
         title,
@@ -2878,7 +2894,7 @@ if (!gotTheLock) {
         skipInitialUserMessage: true,
         systemPrompt,
         skillIds: options.activeSkillIds,
-        workspaceRoot: selectedWorkspaceRoot,
+        workspaceRoot: taskWorkingDirectory,
         confirmationMode: 'modal',
         imageAttachments: options.imageAttachments,
         agentId: options.agentId,

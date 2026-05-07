@@ -2312,6 +2312,7 @@ export class OpenClawConfigSync {
         systemPrompt: '',
         identity: '',
         model: '',
+        workingDirectory: '',
         icon: '',
         skillIds: [],
         enabled: true,

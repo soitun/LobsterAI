@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { OpenClawSessionPatch } from '../../common/openclawSession';
 import type { AppUpdateCheckResult, AppUpdateRuntimeState } from '../../shared/appUpdate/constants';
 interface ApiResponse {
@@ -294,8 +293,8 @@ interface IElectronAPI {
   agents: {
     list: () => Promise<Agent[]>;
     get: (id: string) => Promise<Agent | null>;
-    create: (request: { id?: string; name: string; description?: string; systemPrompt?: string; identity?: string; model?: string; icon?: string; skillIds?: string[]; source?: string; presetId?: string }) => Promise<Agent>;
-    update: (id: string, updates: { name?: string; description?: string; systemPrompt?: string; identity?: string; model?: string; icon?: string; skillIds?: string[]; enabled?: boolean }) => Promise<Agent>;
+    create: (request: { id?: string; name: string; description?: string; systemPrompt?: string; identity?: string; model?: string; workingDirectory?: string; icon?: string; skillIds?: string[]; source?: string; presetId?: string }) => Promise<Agent>;
+    update: (id: string, updates: { name?: string; description?: string; systemPrompt?: string; identity?: string; model?: string; workingDirectory?: string; icon?: string; skillIds?: string[]; enabled?: boolean }) => Promise<Agent>;
     delete: (id: string) => Promise<void>;
     presets: () => Promise<PresetAgent[]>;
     addPreset: (presetId: string) => Promise<Agent>;

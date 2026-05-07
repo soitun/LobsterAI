@@ -24,6 +24,7 @@ class AgentService {
           description: a.description,
           icon: a.icon,
           model: a.model ?? '',
+          workingDirectory: a.workingDirectory ?? '',
           enabled: a.enabled,
           isDefault: a.isDefault,
           source: a.source,
@@ -44,6 +45,7 @@ class AgentService {
     systemPrompt?: string;
     identity?: string;
     model?: string;
+    workingDirectory?: string;
     icon?: string;
     skillIds?: string[];
   }): Promise<Agent | null> {
@@ -56,6 +58,7 @@ class AgentService {
           description: agent.description,
           icon: agent.icon,
           model: agent.model ?? '',
+          workingDirectory: agent.workingDirectory ?? '',
           enabled: agent.enabled,
           isDefault: agent.isDefault,
           source: agent.source,
@@ -76,6 +79,7 @@ class AgentService {
     systemPrompt?: string;
     identity?: string;
     model?: string;
+    workingDirectory?: string;
     icon?: string;
     skillIds?: string[];
     enabled?: boolean;
@@ -90,6 +94,7 @@ class AgentService {
             description: agent.description,
             icon: agent.icon,
             model: agent.model ?? '',
+            workingDirectory: agent.workingDirectory ?? '',
             enabled: agent.enabled,
             skillIds: agent.skillIds ?? [],
           },
@@ -141,6 +146,7 @@ class AgentService {
           description: agent.description,
           icon: agent.icon,
           model: agent.model ?? '',
+          workingDirectory: agent.workingDirectory ?? '',
           enabled: agent.enabled,
           isDefault: agent.isDefault,
           source: agent.source,

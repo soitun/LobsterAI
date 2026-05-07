@@ -302,6 +302,7 @@ export interface Agent {
   systemPrompt: string;
   identity: string;
   model: string;
+  workingDirectory: string;
   icon: string;
   skillIds: string[];
   enabled: boolean;
@@ -319,6 +320,7 @@ export interface CreateAgentRequest {
   systemPrompt?: string;
   identity?: string;
   model?: string;
+  workingDirectory?: string;
   icon?: string;
   skillIds?: string[];
   source?: AgentSource;
@@ -331,6 +333,7 @@ export interface UpdateAgentRequest {
   systemPrompt?: string;
   identity?: string;
   model?: string;
+  workingDirectory?: string;
   icon?: string;
   skillIds?: string[];
   enabled?: boolean;
@@ -1722,6 +1725,7 @@ export class CoworkStore {
       system_prompt: string;
       identity: string;
       model: string;
+      working_directory?: string | null;
       icon: string;
       skill_ids: string;
       enabled: number;
@@ -1747,6 +1751,7 @@ export class CoworkStore {
       system_prompt: string;
       identity: string;
       model: string;
+      working_directory?: string | null;
       icon: string;
       skill_ids: string;
       enabled: number;
@@ -1782,8 +1787,8 @@ export class CoworkStore {
     this.db
       .prepare(
         `
-      INSERT INTO agents (id, name, description, system_prompt, identity, model, icon, skill_ids, enabled, is_default, source, preset_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?, ?)
+      INSERT INTO agents (id, name, description, system_prompt, identity, model, working_directory, icon, skill_ids, enabled, is_default, source, preset_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?, ?)
     `,
       )
       .run(
@@ -1793,6 +1798,7 @@ export class CoworkStore {
         request.systemPrompt || '',
         request.identity || '',
         request.model || '',
+        request.workingDirectory || '',
         request.icon || '',
         JSON.stringify(request.skillIds || []),
         request.source || 'custom',
@@ -1843,6 +1849,10 @@ export class CoworkStore {
       setClauses.push('model = ?');
       values.push(updates.model);
     }
+    if (updates.workingDirectory !== undefined) {
+      setClauses.push('working_directory = ?');
+      values.push(updates.workingDirectory);
+    }
     if (updates.icon !== undefined) {
       setClauses.push('icon = ?');
       values.push(updates.icon);
@@ -1874,6 +1884,7 @@ export class CoworkStore {
     system_prompt: string;
     identity: string;
     model: string;
+    working_directory?: string | null;
     icon: string;
     skill_ids: string;
     enabled: number;
@@ -1896,6 +1907,7 @@ export class CoworkStore {
       systemPrompt: row.system_prompt,
       identity: row.identity,
       model: row.model,
+      workingDirectory: row.working_directory || '',
       icon: row.icon,
       skillIds,
       enabled: Boolean(row.enabled),

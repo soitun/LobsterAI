@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { contextBridge, ipcRenderer } from 'electron';
 
 import { IpcChannel as ScheduledTaskIpc } from '../scheduledTask/constants';
@@ -183,11 +182,11 @@ contextBridge.exposeInMainWorld('electron', {
       const result = await ipcRenderer.invoke('agents:get', id);
       return result?.success ? result.agent : null;
     },
-    create: async (request: { id?: string; name: string; description?: string; systemPrompt?: string; identity?: string; model?: string; icon?: string; skillIds?: string[]; source?: string; presetId?: string }) => {
+    create: async (request: { id?: string; name: string; description?: string; systemPrompt?: string; identity?: string; model?: string; workingDirectory?: string; icon?: string; skillIds?: string[]; source?: string; presetId?: string }) => {
       const result = await ipcRenderer.invoke('agents:create', request);
       return result?.success ? result.agent : null;
     },
-    update: async (id: string, updates: { name?: string; description?: string; systemPrompt?: string; identity?: string; model?: string; icon?: string; skillIds?: string[]; enabled?: boolean }) => {
+    update: async (id: string, updates: { name?: string; description?: string; systemPrompt?: string; identity?: string; model?: string; workingDirectory?: string; icon?: string; skillIds?: string[]; enabled?: boolean }) => {
       const result = await ipcRenderer.invoke('agents:update', id, updates);
       return result?.success ? result.agent : null;
     },
@@ -206,7 +205,7 @@ contextBridge.exposeInMainWorld('electron', {
   },
   cowork: {
     // Session management
-    startSession: (options: { prompt: string; cwd?: string; systemPrompt?: string; activeSkillIds?: string[]; agentId?: string; imageAttachments?: Array<{ name: string; mimeType: string; base64Data: string }> }) =>
+    startSession: (options: { prompt: string; cwd?: string; systemPrompt?: string; title?: string; activeSkillIds?: string[]; agentId?: string; modelOverride?: string; imageAttachments?: Array<{ name: string; mimeType: string; base64Data: string }> }) =>
       ipcRenderer.invoke('cowork:session:start', options),
     continueSession: (options: { sessionId: string; prompt: string; systemPrompt?: string; activeSkillIds?: string[]; imageAttachments?: Array<{ name: string; mimeType: string; base64Data: string }> }) =>
       ipcRenderer.invoke('cowork:session:continue', options),

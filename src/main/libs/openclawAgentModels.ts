@@ -192,6 +192,7 @@ export function buildAgentEntry(
     } : {}),
     ...(agent.skillIds && agent.skillIds.length > 0 ? { skills: agent.skillIds } : {}),
     ...(options?.workspace ? { workspace: options.workspace } : {}),
+    ...(agent.workingDirectory?.trim() ? { cwd: path.resolve(agent.workingDirectory.trim()) } : {}),
     model: {
       primary: primaryModel,
     },

@@ -3,6 +3,7 @@ import React, { useEffect, useRef,useState } from 'react';
 import { useDispatch,useSelector } from 'react-redux';
 
 import { buildSessionTitleFromInput } from '../../../common/sessionTitle';
+import { agentService } from '../../services/agent';
 import { coworkService } from '../../services/cowork';
 import { i18nService } from '../../services/i18n';
 import { quickActionService } from '../../services/quickAction';
@@ -67,6 +68,7 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
   const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
   const agents = useSelector((state: RootState) => state.agent.agents);
   const currentAgent = agents.find((agent) => agent.id === currentAgentId);
+  const currentAgentWorkingDirectory = currentAgent?.workingDirectory?.trim() || config.workingDirectory || '';
   const currentAgentSelectedModel = useAgentSelectedModel(currentAgentId, currentAgent?.model ?? '');
 
   const buildApiConfigNotice = (error?: string): { noticeI18nKey: string; noticeExtra?: string } => {
@@ -231,7 +233,7 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
         pinned: false,
         createdAt: now,
         updatedAt: now,
-        cwd: config.workingDirectory || '',
+        cwd: currentAgentWorkingDirectory,
         systemPrompt: '',
         modelOverride: currentAgentSelectedModel ? toOpenClawModelRef(currentAgentSelectedModel) : '',
         executionMode: config.executionMode || 'local',
@@ -277,7 +279,7 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
       const { session: startedSession, error: startError } = await coworkService.startSession({
         prompt,
         title: fallbackTitle,
-        cwd: config.workingDirectory || undefined,
+        cwd: currentAgentWorkingDirectory || undefined,
         systemPrompt: combinedSystemPrompt,
         activeSkillIds: sessionSkillIds,
         agentId: currentAgentId,
@@ -583,9 +585,9 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
                 disabled={!isEngineReady}
                 placeholder={i18nService.t('coworkPlaceholder')}
                 size="large"
-                workingDirectory={config.workingDirectory}
+                workingDirectory={currentAgentWorkingDirectory}
                 onWorkingDirectoryChange={async (dir: string) => {
-                  await coworkService.updateConfig({ workingDirectory: dir });
+                  await agentService.updateAgent(currentAgentId, { workingDirectory: dir });
                 }}
                 showFolderSelector={true}
                 onManageSkills={() => onShowSkills?.()}

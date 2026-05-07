@@ -17,6 +17,7 @@ describe('buildAgentEntry', () => {
       systemPrompt: '',
       identity: '',
       model: 'lobsterai-server/deepseek-v3.2',
+      workingDirectory: '',
       icon: '',
       skillIds: [],
       enabled: true,
@@ -42,6 +43,7 @@ describe('buildAgentEntry', () => {
       systemPrompt: '',
       identity: '',
       model: 'openai/gpt-5.3-codex',
+      workingDirectory: '',
       icon: '',
       skillIds: [],
       enabled: true,
@@ -70,6 +72,7 @@ describe('buildAgentEntry', () => {
       systemPrompt: '',
       identity: '',
       model: 'deepseek-v3.2',
+      workingDirectory: '',
       icon: '',
       skillIds: [],
       enabled: true,
@@ -85,6 +88,31 @@ describe('buildAgentEntry', () => {
       model: { primary: 'anthropic/claude-sonnet-4' },
     });
   });
+
+  test('emits per-agent cwd when a working directory is configured', () => {
+    const result = buildAgentEntry({
+      id: 'docs',
+      name: 'Docs',
+      description: '',
+      systemPrompt: '',
+      identity: '',
+      model: '',
+      workingDirectory: '/tmp/docs-project',
+      icon: '',
+      skillIds: [],
+      enabled: true,
+      isDefault: false,
+      source: 'custom',
+      presetId: '',
+      createdAt: 0,
+      updatedAt: 0,
+    }, 'anthropic/claude-sonnet-4');
+
+    expect(result).toMatchObject({
+      id: 'docs',
+      cwd: '/tmp/docs-project',
+    });
+  });
 });
 
 describe('buildManagedAgentEntries', () => {
@@ -98,6 +126,7 @@ describe('buildManagedAgentEntries', () => {
           systemPrompt: '',
           identity: '',
           model: 'openai/gpt-4o',
+          workingDirectory: '',
           icon: '✍️',
           skillIds: ['docx'],
           enabled: true,
@@ -128,6 +157,7 @@ describe('buildManagedAgentEntries', () => {
           systemPrompt: '',
           identity: '',
           model: '',
+          workingDirectory: '',
           icon: '✍️',
           skillIds: [],
           enabled: true,
@@ -157,6 +187,7 @@ describe('buildManagedAgentEntries', () => {
           systemPrompt: '',
           identity: '',
           model: 'openai/gpt-4o',
+          workingDirectory: '',
           icon: '🦀',
           skillIds: [],
           enabled: true,

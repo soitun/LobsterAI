@@ -1,7 +1,7 @@
 import { ExclamationTriangleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import type { Platform } from '@shared/platform';
 import { PlatformRegistry } from '@shared/platform';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 
 import { agentService } from '../../services/agent';
@@ -15,6 +15,7 @@ import { getVisibleIMPlatforms } from '../../utils/regionFilter';
 import Modal from '../common/Modal';
 import ModelSelector from '../ModelSelector';
 import AgentSkillSelector from './AgentSkillSelector';
+import AgentWorkingDirectoryField from './AgentWorkingDirectoryField';
 import EmojiPicker from './EmojiPicker';
 
 type CreateTab = 'basic' | 'skills' | 'im';
@@ -38,28 +39,51 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
   const [identity, setIdentity] = useState('');
   const [icon, setIcon] = useState('');
   const [model, setModel] = useState<Model | null>(null);
+  const [workingDirectory, setWorkingDirectory] = useState('');
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [activeTab, setActiveTab] = useState<CreateTab>('basic');
   const globalSelectedModel = useSelector((state: RootState) => state.model.defaultSelectedModel);
   const agents = useSelector((state: RootState) => state.agent.agents);
+  const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
+  const coworkConfig = useSelector((state: RootState) => state.cowork.config);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+  const initialWorkingDirectoryRef = useRef('');
+  const initializedOpenRef = useRef(false);
 
   // IM binding state — keys are 'telegram' (single) or 'dingtalk:<instanceId>' (multi)
   const [imConfig, setImConfig] = useState<IMGatewayConfig | null>(null);
   const [boundKeys, setBoundKeys] = useState<Set<string>>(new Set());
 
   const isDirty = useCallback((): boolean => {
-    return !!(name || description || systemPrompt || identity || icon || skillIds.length > 0 || boundKeys.size > 0);
-  }, [name, description, systemPrompt, identity, icon, skillIds, boundKeys]);
+    return !!(
+      name
+      || description
+      || systemPrompt
+      || identity
+      || icon
+      || workingDirectory !== initialWorkingDirectoryRef.current
+      || skillIds.length > 0
+      || boundKeys.size > 0
+    );
+  }, [name, description, systemPrompt, identity, icon, workingDirectory, skillIds, boundKeys]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initializedOpenRef.current = false;
+      return;
+    }
+    if (initializedOpenRef.current) return;
+    initializedOpenRef.current = true;
     setName('');
     setDescription('');
     setSystemPrompt('');
     setIdentity('');
     setIcon('');
+    const currentAgent = agents.find((agent) => agent.id === currentAgentId);
+    const defaultWorkingDirectory = currentAgent?.workingDirectory?.trim() || coworkConfig.workingDirectory || '';
+    initialWorkingDirectoryRef.current = defaultWorkingDirectory;
+    setWorkingDirectory(defaultWorkingDirectory);
     setSkillIds([]);
     setActiveTab('basic');
     setShowUnsavedConfirm(false);
@@ -67,7 +91,7 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
     imService.loadConfig().then((cfg) => {
       if (cfg) setImConfig(cfg);
     });
-  }, [isOpen]);
+  }, [agents, coworkConfig.workingDirectory, currentAgentId, isOpen]);
 
   useEffect(() => {
     if (!isOpen || model || !globalSelectedModel) return;
@@ -83,6 +107,7 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
     setIdentity('');
     setIcon('');
     setModel(null);
+    setWorkingDirectory('');
     setSkillIds([]);
     setActiveTab('basic');
     setBoundKeys(new Set());
@@ -111,6 +136,7 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
         systemPrompt: systemPrompt.trim(),
         identity: identity.trim(),
         model: model ? toOpenClawModelRef(model) : '',
+        workingDirectory: workingDirectory.trim(),
         icon: icon.trim() || undefined,
         skillIds,
       });
@@ -281,6 +307,10 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
                   onChange={setModel}
                 />
               </div>
+              <AgentWorkingDirectoryField
+                value={workingDirectory}
+                onChange={setWorkingDirectory}
+              />
             </div>
           )}
 

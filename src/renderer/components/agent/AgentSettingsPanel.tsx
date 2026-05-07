@@ -17,6 +17,7 @@ import Modal from '../common/Modal';
 import TrashIcon from '../icons/TrashIcon';
 import ModelSelector from '../ModelSelector';
 import AgentSkillSelector from './AgentSkillSelector';
+import AgentWorkingDirectoryField from './AgentWorkingDirectoryField';
 import EmojiPicker from './EmojiPicker';
 
 type SettingsTab = 'basic' | 'skills' | 'im';
@@ -47,6 +48,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
   const [identity, setIdentity] = useState('');
   const [icon, setIcon] = useState('');
   const [model, setModel] = useState<Model | null>(null);
+  const [workingDirectory, setWorkingDirectory] = useState('');
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -65,6 +67,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
     systemPrompt: '',
     identity: '',
     icon: '',
+    workingDirectory: '',
     skillIds: [] as string[],
   });
 
@@ -82,6 +85,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
         setIdentity(a.identity);
         setIcon(a.icon);
         setModel(resolveOpenClawModelRef(a.model, availableModels) ?? null);
+        setWorkingDirectory(a.workingDirectory ?? '');
         setSkillIds(a.skillIds ?? []);
         initialValuesRef.current = {
           name: a.name,
@@ -89,6 +93,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
           systemPrompt: a.systemPrompt,
           identity: a.identity,
           icon: a.icon,
+          workingDirectory: a.workingDirectory ?? '',
           skillIds: a.skillIds ?? [],
         };
       }
@@ -118,10 +123,11 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
     if (systemPrompt !== init.systemPrompt) return true;
     if (identity !== init.identity) return true;
     if (icon !== init.icon) return true;
+    if (workingDirectory !== init.workingDirectory) return true;
     if (skillIds.length !== init.skillIds.length || skillIds.some((id, i) => id !== init.skillIds[i])) return true;
     if (boundKeys.size !== initialBoundKeys.size || [...boundKeys].some((k) => !initialBoundKeys.has(k))) return true;
     return false;
-  }, [name, description, systemPrompt, identity, icon, skillIds, boundKeys, initialBoundKeys]);
+  }, [name, description, systemPrompt, identity, icon, workingDirectory, skillIds, boundKeys, initialBoundKeys]);
 
   if (!agentId) return null;
 
@@ -148,6 +154,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
         systemPrompt: systemPrompt.trim(),
         identity: identity.trim(),
         model: model ? toOpenClawModelRef(model) : '',
+        workingDirectory: workingDirectory.trim(),
         icon: icon.trim(),
         skillIds,
       });
@@ -493,6 +500,10 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
                   onChange={setModel}
                 />
               </div>
+              <AgentWorkingDirectoryField
+                value={workingDirectory}
+                onChange={setWorkingDirectory}
+              />
             </div>
           )}
 
