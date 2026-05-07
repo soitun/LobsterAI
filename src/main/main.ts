@@ -4956,6 +4956,43 @@ if (!gotTheLock) {
     }
   );
 
+  ipcMain.handle(
+    'dialog:generateThumbnail',
+    async (_event, filePath?: string): Promise<{ success: boolean; dataUrl?: string; error?: string }> => {
+      try {
+        if (typeof filePath !== 'string' || !filePath.trim()) {
+          return { success: false, error: 'Missing file path' };
+        }
+        const resolvedPath = path.resolve(filePath.trim());
+        const stat = await fs.promises.stat(resolvedPath);
+        if (!stat.isFile()) {
+          return { success: false, error: 'Not a file' };
+        }
+        if (process.platform !== 'darwin') {
+          return { success: false, error: 'Thumbnail generation only supported on macOS' };
+        }
+        const { execFile } = await import('child_process');
+        const { promisify } = await import('util');
+        const execFileAsync = promisify(execFile);
+        const tmpDir = path.join(app.getPath('temp'), 'lobsterai-thumbnails');
+        await fs.promises.mkdir(tmpDir, { recursive: true });
+        const baseName = path.basename(resolvedPath);
+        const outputFile = path.join(tmpDir, `${baseName}.png`);
+        try { await fs.promises.unlink(outputFile); } catch { /* ignore */ }
+        await execFileAsync('qlmanage', ['-t', '-s', '1200', '-o', tmpDir, resolvedPath]);
+        const thumbBuffer = await fs.promises.readFile(outputFile);
+        const base64 = thumbBuffer.toString('base64');
+        try { await fs.promises.unlink(outputFile); } catch { /* ignore */ }
+        return { success: true, dataUrl: `data:image/png;base64,${base64}` };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to generate thumbnail',
+        };
+      }
+    }
+  );
+
   // Shell handlers - 打开文件/文件夹
   ipcMain.handle('shell:openPath', async (_event, filePath: string) => {
     try {
@@ -4984,6 +5021,19 @@ if (!gotTheLock) {
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {
     try {
       await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('shell:openHtmlInBrowser', async (_event, htmlContent: string) => {
+    try {
+      const tmpDir = path.join(os.tmpdir(), 'lobsterai-preview');
+      fs.mkdirSync(tmpDir, { recursive: true });
+      const tmpFile = path.join(tmpDir, `preview-${Date.now()}.html`);
+      fs.writeFileSync(tmpFile, htmlContent, 'utf-8');
+      await shell.openExternal(`file://${tmpFile}`);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -5224,11 +5274,29 @@ if (!gotTheLock) {
     }
   };
 
+  const isArtifactSandboxUrl = (url: string): boolean => {
+    try {
+      const pathname = new URL(url).pathname;
+      return pathname.endsWith('/artifact-react-sandbox.html')
+        || pathname.includes('/vendor/react.production.min.js')
+        || pathname.includes('/vendor/react-dom.production.min.js')
+        || pathname.includes('/vendor/babel.min.js');
+    } catch {
+      return false;
+    }
+  };
+
   // 设置 Content Security Policy
   const setContentSecurityPolicy = () => {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       // 跳过企微授权页面，让其使用自身的 CSP（否则外部脚本被阻止导致空白页）
       if (isWecomAuthUrl(details.url)) {
+        callback({ responseHeaders: details.responseHeaders });
+        return;
+      }
+
+      // 跳过 artifact 沙箱及其 vendor 脚本的 CSP（iframe sandbox="allow-scripts" 隔离）
+      if (isArtifactSandboxUrl(details.url)) {
         callback({ responseHeaders: details.responseHeaders });
         return;
       }
@@ -5244,7 +5312,7 @@ if (!gotTheLock) {
         "font-src 'self' data:",
         "media-src 'self'",
         "worker-src 'self' blob:",
-        "frame-src 'self'"
+        "frame-src 'self' file:"
       ];
 
       callback({
@@ -5418,7 +5486,8 @@ if (!gotTheLock) {
     }
 
     // 添加错误处理
-    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame) return;
       console.error('Page failed to load:', errorCode, errorDescription);
       // 如果加载失败，尝试重新加载
       if (isDev) {
