@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { getScheduledReminderDisplayText } from '../../../scheduledTask/reminderText';
-import { getArtifactTypeFromExtension, parseCodeBlockArtifacts, parseFileLinksFromMessage, parseFilePathsFromText, parseToolArtifact } from '../../services/artifactParser';
+import { getArtifactTypeFromExtension, normalizeFilePathForDedup, parseCodeBlockArtifacts, parseFileLinksFromMessage, parseFilePathsFromText, parseToolArtifact } from '../../services/artifactParser';
 import { coworkService } from '../../services/cowork';
 import { i18nService } from '../../services/i18n';
 import { RootState } from '../../store';
@@ -1780,16 +1780,18 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
 
           const fileLinks = parseFileLinksFromMessage(msg.content, msg.id, sessionId);
           for (const fl of fileLinks) {
-            if (fl.filePath && !seenFilePaths.has(fl.filePath)) {
-              seenFilePaths.add(fl.filePath);
+            const normalized = fl.filePath ? normalizeFilePathForDedup(fl.filePath) : '';
+            if (fl.filePath && !seenFilePaths.has(normalized)) {
+              seenFilePaths.add(normalized);
               detected.push(fl);
             }
           }
 
           const pathArtifacts = parseFilePathsFromText(msg.content, msg.id, sessionId);
           for (const pa of pathArtifacts) {
-            if (pa.filePath && !seenFilePaths.has(pa.filePath)) {
-              seenFilePaths.add(pa.filePath);
+            const normalized = pa.filePath ? normalizeFilePathForDedup(pa.filePath) : '';
+            if (pa.filePath && !seenFilePaths.has(normalized)) {
+              seenFilePaths.add(normalized);
               detected.push(pa);
             }
           }
@@ -1798,8 +1800,9 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
         if (msg.type === 'tool_result' && msg.content) {
           const pathArtifacts = parseFilePathsFromText(msg.content, msg.id, sessionId, 'artifact-toolresult');
           for (const pa of pathArtifacts) {
-            if (pa.filePath && !seenFilePaths.has(pa.filePath)) {
-              seenFilePaths.add(pa.filePath);
+            const normalized = pa.filePath ? normalizeFilePathForDedup(pa.filePath) : '';
+            if (pa.filePath && !seenFilePaths.has(normalized)) {
+              seenFilePaths.add(normalized);
               detected.push(pa);
             }
           }
@@ -1814,9 +1817,12 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
             ? messages.find(m => m.type === 'tool_result' && m.metadata?.toolUseId === toolUseId)
             : messages[i + 1]?.type === 'tool_result' ? messages[i + 1] : undefined;
           const toolArtifact = parseToolArtifact(msg, toolResult, sessionId);
-          if (toolArtifact && toolArtifact.filePath && !seenFilePaths.has(toolArtifact.filePath)) {
-            seenFilePaths.add(toolArtifact.filePath);
-            detected.push(toolArtifact);
+          if (toolArtifact && toolArtifact.filePath) {
+            const normalized = normalizeFilePathForDedup(toolArtifact.filePath);
+            if (!seenFilePaths.has(normalized)) {
+              seenFilePaths.add(normalized);
+              detected.push(toolArtifact);
+            }
           } else if (toolArtifact && !toolArtifact.filePath) {
             detected.push(toolArtifact);
           }
@@ -1841,9 +1847,13 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
           } else if (rawPath.startsWith('file:/')) {
             rawPath = rawPath.slice(5);
           }
+          // Strip leading / before Windows drive letter
+          if (/^\/[A-Za-z]:/.test(rawPath)) {
+            rawPath = rawPath.slice(1);
+          }
           const absPath = rawPath.startsWith('/')
             ? rawPath
-            : `${cwd}/${rawPath}`;
+            : (/^[A-Za-z]:/.test(rawPath) ? rawPath : `${cwd}/${rawPath}`);
           try {
             const result = await window.electron.dialog.readFileAsDataUrl(absPath);
             if (result?.success && result.dataUrl) {
@@ -1873,6 +1883,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
     } catch (err) {
       console.error('[ArtifactDetection] failed:', err);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- uses messagesLength as stable proxy for currentSession.messages
   }, [sessionId, messagesLength, isStreaming, dispatch]);
 
   // Intercept clicks on artifact-compatible file links → open in panel
@@ -1893,6 +1904,10 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
       } catch {
         filePath = href.replace(/^file:\/\//, '');
       }
+      // Strip leading / before Windows drive letter
+      if (/^\/[A-Za-z]:/.test(filePath)) {
+        filePath = filePath.slice(1);
+      }
 
       const lastDot = filePath.lastIndexOf('.');
       if (lastDot === -1) return;
@@ -1902,7 +1917,8 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
       e.preventDefault();
       e.stopPropagation();
 
-      const existing = sessionArtifacts.find(a => a.filePath === filePath);
+      const normalizedClick = normalizeFilePathForDedup(filePath);
+      const existing = sessionArtifacts.find(a => a.filePath && normalizeFilePathForDedup(a.filePath) === normalizedClick);
       if (existing) {
         dispatch(selectArtifact(existing.id));
       } else {

@@ -157,6 +157,10 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({ artifacts }) => {
       } else if (filePath.startsWith('file:/')) {
         filePath = filePath.slice(5);
       }
+      // Strip leading / before Windows drive letter
+      if (/^\/[A-Za-z]:/.test(filePath)) {
+        filePath = filePath.slice(1);
+      }
       window.electron?.shell?.openPath(filePath);
     }
   }, [selectedArtifact]);

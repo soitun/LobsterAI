@@ -1,6 +1,17 @@
 import type { Artifact, ArtifactType } from '../types/artifact';
 import type { CoworkMessage } from '../types/cowork';
 
+/**
+ * Normalize file path for deduplication comparison.
+ * Handles Windows file:// URL leading slash and backslash differences.
+ */
+export function normalizeFilePathForDedup(p: string): string {
+  // Strip leading / before drive letter (e.g. /D:/path from file:///D:/path)
+  if (/^\/[A-Za-z]:/.test(p)) p = p.slice(1);
+  // Unify separators and case for comparison
+  return p.replace(/\\/g, '/').toLowerCase();
+}
+
 const LANGUAGE_TO_ARTIFACT_TYPE: Record<string, ArtifactType> = {
   html: 'html',
   svg: 'svg',
@@ -132,6 +143,11 @@ export function parseFilePathsFromText(
       filePath = filePath.slice(5);
     }
 
+    // Strip leading / before Windows drive letter (e.g. /D:/path from file:///D:/path)
+    if (/^\/[A-Za-z]:/.test(filePath)) {
+      filePath = filePath.slice(1);
+    }
+
     const ext = getFileExtension(filePath);
     const artifactType = getArtifactTypeFromExtension(ext);
     if (!artifactType) continue;
@@ -176,6 +192,10 @@ export function parseFileLinksFromMessage(
       filePath = decodeURIComponent(match[2]);
     } catch {
       filePath = match[2];
+    }
+    // Strip leading / before Windows drive letter (e.g. /D:/path from file:///D:/path)
+    if (/^\/[A-Za-z]:/.test(filePath)) {
+      filePath = filePath.slice(1);
     }
     const ext = getFileExtension(filePath);
     const artifactType = getArtifactTypeFromExtension(ext);

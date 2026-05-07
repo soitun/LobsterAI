@@ -49,6 +49,10 @@ function useFileContent(artifact: Artifact): { data: ArrayBuffer | null; loading
         } else if (filePath.startsWith('file:/')) {
           filePath = filePath.slice(5);
         }
+        // Strip leading / before Windows drive letter
+        if (/^\/[A-Za-z]:/.test(filePath)) {
+          filePath = filePath.slice(1);
+        }
         try {
           const result = await window.electron.dialog.readFileAsDataUrl(filePath);
           if (cancelled) return;
@@ -449,7 +453,6 @@ const PdfSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
   const { data, loading, error: loadError } = useFileContent(artifact);
   const [pageCount, setPageCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [renderWidth, setRenderWidth] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -561,7 +564,6 @@ const PdfPageCanvas: React.FC<{
 
     const renderPage = async () => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const page = await (pdfDoc as any).getPage(pageNumber);
         if (cancelled) return;
 
@@ -787,6 +789,8 @@ const PptxHtmlFallback: React.FC<{ artifact: Artifact; data: ArrayBuffer }> = ({
       if (filePath.startsWith('file:///')) filePath = filePath.slice(7);
       else if (filePath.startsWith('file://')) filePath = filePath.slice(7);
       else if (filePath.startsWith('file:/')) filePath = filePath.slice(5);
+      // Strip leading / before Windows drive letter
+      if (/^\/[A-Za-z]:/.test(filePath)) filePath = filePath.slice(1);
 
       const dir = filePath.substring(0, filePath.lastIndexOf('/'));
       const slidesDir = `${dir}/slides`;
