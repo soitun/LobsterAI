@@ -207,6 +207,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     newChat: '新建任务',
     search: '搜索任务',
     openSettings: '打开设置',
+    restartApp: '重新启动',
     sendMessageShortcut: '发送消息',
     shortcutConflict: '快捷键 "{0}" 已被 "{1}" 使用',
     close: '关闭',
@@ -1789,6 +1790,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     newChat: 'New Task',
     search: 'Search Tasks',
     openSettings: 'Open Settings',
+    restartApp: 'Restart',
     sendMessageShortcut: 'Send Message',
     shortcutConflict: 'Shortcut "{0}" is already used by "{1}"',
     close: 'Close',
@@ -3230,7 +3232,6 @@ class I18nService {
           console.log(`[i18n] Legacy user detected with custom language: ${config.language}`);
           this.currentLanguage = config.language;
           configService.updateConfig({
-            ...config,
             language_initialized: true,
           });
         } else {
@@ -3247,7 +3248,6 @@ class I18nService {
 
             // 保存语言配置和初始化标记
             configService.updateConfig({
-              ...config,
               language: defaultLanguage,
               language_initialized: true,
             });
@@ -3256,7 +3256,6 @@ class I18nService {
             // 如果获取系统语言失败,默认使用英文
             this.currentLanguage = 'en';
             configService.updateConfig({
-              ...config,
               language: 'en',
               language_initialized: true,
             });
@@ -3270,7 +3269,6 @@ class I18nService {
           // 如果配置无效,fallback 到英文
           this.currentLanguage = 'en';
           configService.updateConfig({
-            ...config,
             language: 'en',
           });
         }

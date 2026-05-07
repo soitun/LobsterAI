@@ -56,6 +56,10 @@ const getOpenClawProviderIdForConfig = (
   return ProviderRegistry.getOpenClawProviderId(providerName);
 };
 
+/** Used for config + i18n init; longer on Windows where main-process IPC can stall during cold start. */
+const INIT_STEP_TIMEOUT_MS_WINDOWS = 24_000;
+const INIT_STEP_TIMEOUT_MS_DEFAULT = 16_000;
+
 const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsOptions, setSettingsOptions] = useState<SettingsOpenOptions>({});
@@ -134,7 +138,10 @@ const App: React.FC = () => {
         mark('start');
         document.documentElement.classList.add(`platform-${window.electron.platform}`);
 
-        const initTimeoutMs = window.electron.platform === 'win32' ? 15_000 : 10_000;
+        const initTimeoutMs =
+          window.electron.platform === 'win32'
+            ? INIT_STEP_TIMEOUT_MS_WINDOWS
+            : INIT_STEP_TIMEOUT_MS_DEFAULT;
         mark('configService.init begin');
         await waitWithTimeout(configService.init(), initTimeoutMs, 'configService.init');
         mark('configService.init done');
@@ -726,12 +733,20 @@ const App: React.FC = () => {
               <ChatBubbleLeftRightIcon className="h-8 w-8 text-white" />
             </div>
             <div className="text-foreground text-xl font-medium text-center">{initError}</div>
-            <button
-              onClick={() => handleShowSettings()}
-              className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl shadow-md transition-colors text-sm font-medium"
-            >
-              {i18nService.t('openSettings')}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => window.electron.appInfo.relaunch()}
+                className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl transition-colors text-sm font-medium"
+              >
+                {i18nService.t('restartApp')}
+              </button>
+              <button
+                onClick={() => handleShowSettings()}
+                className="px-6 py-2.5 border border-border text-foreground hover:bg-surface-raised rounded-xl transition-colors text-sm font-medium"
+              >
+                {i18nService.t('openSettings')}
+              </button>
+            </div>
           </div>
           {showSettings && (
             <Settings

@@ -561,6 +561,7 @@ interface IElectronAPI {
   appInfo: {
     getVersion: () => Promise<string>;
     getSystemLocale: () => Promise<string>;
+    relaunch: () => Promise<void>;
   };
   appUpdate: {
     getState: () => Promise<AppUpdateRuntimeState>;

@@ -2193,6 +2193,12 @@ if (!gotTheLock) {
     }
   });
 
+  ipcMain.handle('app:relaunch', () => {
+    console.log('[Main] app:relaunch requested, scheduling restart...');
+    app.relaunch();
+    app.quit();
+  });
+
   // Window control IPC handlers
   ipcMain.on('window-minimize', () => {
     mainWindow?.minimize();
