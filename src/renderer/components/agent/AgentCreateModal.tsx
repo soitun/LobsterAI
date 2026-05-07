@@ -13,12 +13,11 @@ import type { DingTalkInstanceConfig, DiscordInstanceConfig, FeishuInstanceConfi
 import { toOpenClawModelRef } from '../../utils/openclawModelRef';
 import { getVisibleIMPlatforms } from '../../utils/regionFilter';
 import Modal from '../common/Modal';
-import ModelSelector from '../ModelSelector';
+import AgentDetailToolbar from './AgentDetailToolbar';
 import AgentSkillSelector from './AgentSkillSelector';
-import AgentWorkingDirectoryField from './AgentWorkingDirectoryField';
+import { AgentDetailTab } from './constants';
 import EmojiPicker from './EmojiPicker';
 
-type CreateTab = 'basic' | 'skills' | 'im';
 type MultiInstancePlatform = 'dingtalk' | 'feishu' | 'qq' | 'wecom' | 'discord' | 'popo';
 type MultiInstanceConfig = DingTalkInstanceConfig | FeishuInstanceConfig | QQInstanceConfig | WecomInstanceConfig | DiscordInstanceConfig | PopoInstanceConfig;
 
@@ -42,13 +41,14 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
   const [workingDirectory, setWorkingDirectory] = useState('');
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
-  const [activeTab, setActiveTab] = useState<CreateTab>('basic');
+  const [activeTab, setActiveTab] = useState<AgentDetailTab>(AgentDetailTab.Prompt);
   const globalSelectedModel = useSelector((state: RootState) => state.model.defaultSelectedModel);
   const agents = useSelector((state: RootState) => state.agent.agents);
   const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
   const coworkConfig = useSelector((state: RootState) => state.cowork.config);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const initialWorkingDirectoryRef = useRef('');
+  const initialModelRef = useRef('');
   const initializedOpenRef = useRef(false);
 
   // IM binding state — keys are 'telegram' (single) or 'dingtalk:<instanceId>' (multi)
@@ -62,11 +62,12 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
       || systemPrompt
       || identity
       || icon
+      || (model ? toOpenClawModelRef(model) : '') !== initialModelRef.current
       || workingDirectory !== initialWorkingDirectoryRef.current
       || skillIds.length > 0
       || boundKeys.size > 0
     );
-  }, [name, description, systemPrompt, identity, icon, workingDirectory, skillIds, boundKeys]);
+  }, [name, description, systemPrompt, identity, icon, model, workingDirectory, skillIds, boundKeys]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -83,18 +84,23 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
     const currentAgent = agents.find((agent) => agent.id === currentAgentId);
     const defaultWorkingDirectory = currentAgent?.workingDirectory?.trim() || coworkConfig.workingDirectory || '';
     initialWorkingDirectoryRef.current = defaultWorkingDirectory;
+    initialModelRef.current = globalSelectedModel ? toOpenClawModelRef(globalSelectedModel) : '';
+    setModel(globalSelectedModel ?? null);
     setWorkingDirectory(defaultWorkingDirectory);
     setSkillIds([]);
-    setActiveTab('basic');
+    setActiveTab(AgentDetailTab.Prompt);
     setShowUnsavedConfirm(false);
     setBoundKeys(new Set());
     imService.loadConfig().then((cfg) => {
       if (cfg) setImConfig(cfg);
     });
-  }, [agents, coworkConfig.workingDirectory, currentAgentId, isOpen]);
+  }, [agents, coworkConfig.workingDirectory, currentAgentId, globalSelectedModel, isOpen]);
 
   useEffect(() => {
     if (!isOpen || model || !globalSelectedModel) return;
+    if (!initialModelRef.current) {
+      initialModelRef.current = toOpenClawModelRef(globalSelectedModel);
+    }
     setModel(globalSelectedModel);
   }, [globalSelectedModel, isOpen, model]);
 
@@ -109,7 +115,7 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
     setModel(null);
     setWorkingDirectory('');
     setSkillIds([]);
-    setActiveTab('basic');
+    setActiveTab(AgentDetailTab.Prompt);
     setBoundKeys(new Set());
   };
 
@@ -199,24 +205,40 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
     return agent?.name || aid;
   };
 
-  const tabs: { key: CreateTab; label: string }[] = [
-    { key: 'basic', label: i18nService.t('agentTabBasic') || 'Basic Info' },
-    { key: 'skills', label: i18nService.t('agentTabSkills') || 'Skills' },
-    { key: 'im', label: i18nService.t('agentTabIM') || 'IM Channels' },
+  const tabs: { key: AgentDetailTab; label: string }[] = [
+    { key: AgentDetailTab.Prompt, label: i18nService.t('agentTabPrompt') },
+    { key: AgentDetailTab.Identity, label: i18nService.t('agentIdentity') },
+    { key: AgentDetailTab.Skills, label: i18nService.t('agentTabSkills') },
+    { key: AgentDetailTab.Im, label: i18nService.t('agentTabIM') },
   ];
 
   return (
     <>
-    <Modal isOpen={isOpen} onClose={handleClose} className="w-full max-w-2xl mx-4 rounded-xl shadow-xl bg-surface border border-border max-h-[80vh] flex flex-col">
-        {/* Header: agent icon + name + close */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">{icon || '🤖'}</span>
-            <h3 className="text-base font-semibold text-foreground">
-              {name || (i18nService.t('createAgent') || 'Create Agent')}
-            </h3>
+    <Modal isOpen={isOpen} onClose={handleClose} className="w-full max-w-3xl mx-4 rounded-xl shadow-xl bg-surface border border-border max-h-[82vh] flex flex-col overflow-hidden">
+        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <EmojiPicker value={icon} onChange={setIcon} />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={i18nService.t('agentNamePlaceholder')}
+                aria-label={i18nService.t('agentName')}
+                className="min-w-0 flex-1 bg-transparent text-base font-semibold text-foreground placeholder:text-secondary/40 focus:outline-none"
+                autoFocus
+              />
+            </div>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={i18nService.t('agentDescriptionPlaceholder')}
+              aria-label={i18nService.t('agentDescription')}
+              className="mt-2 w-full bg-transparent text-sm text-secondary placeholder:text-secondary/50 focus:outline-none"
+            />
           </div>
-          <button type="button" onClick={handleClose} className="p-1 rounded-lg hover:bg-surface-raised">
+          <button type="button" onClick={handleClose} className="p-2 rounded-lg hover:bg-surface-raised transition-colors">
             <XMarkIcon className="h-5 w-5 text-secondary" />
           </button>
         </div>
@@ -243,85 +265,35 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
         </div>
 
         {/* Tab content */}
-        <div className="px-5 py-4 overflow-y-auto flex-1 min-h-[300px]">
-          {activeTab === 'basic' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('agentName') || 'Name'} *
-                </label>
-                <div className="flex gap-2">
-                  <EmojiPicker value={icon} onChange={setIcon} />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={i18nService.t('agentNamePlaceholder') || 'Agent name'}
-                    className="flex-1 px-3 py-2 rounded-lg border border-border bg-transparent text-foreground text-sm"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('agentDescription') || 'Description'}
-                </label>
-                <input
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={i18nService.t('agentDescriptionPlaceholder') || 'Brief description'}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-foreground text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('systemPrompt') || 'System Prompt'}
-                </label>
-                <textarea
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder={i18nService.t('systemPromptPlaceholder') || 'Describe the agent\'s role and behavior...'}
-                  rows={4}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-foreground text-sm resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('agentIdentity') || 'Identity'}
-                </label>
-                <textarea
-                  value={identity}
-                  onChange={(e) => setIdentity(e.target.value)}
-                  rows={3}
-                  placeholder={i18nService.t('agentIdentityPlaceholder') || 'Identity description (IDENTITY.md)...'}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-foreground text-sm resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('agentDefaultModel') || 'Agent Default Model'}
-                </label>
-                <ModelSelector
-                  value={model}
-                  onChange={setModel}
-                />
-              </div>
-              <AgentWorkingDirectoryField
-                value={workingDirectory}
-                onChange={setWorkingDirectory}
-              />
-            </div>
+        <div className="px-5 py-4 overflow-y-auto flex-1 min-h-[360px]">
+          {activeTab === AgentDetailTab.Prompt && (
+            <textarea
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder={i18nService.t('agentSystemPromptPlaceholder')}
+              aria-label={i18nService.t('systemPrompt')}
+              className="h-full min-h-[320px] w-full resize-none rounded-lg border border-transparent bg-transparent px-1 py-1 text-sm leading-6 text-foreground placeholder:text-secondary/45 focus:border-border focus:outline-none"
+            />
           )}
 
-          {activeTab === 'skills' && (
+          {activeTab === AgentDetailTab.Identity && (
+            <textarea
+              value={identity}
+              onChange={(e) => setIdentity(e.target.value)}
+              placeholder={i18nService.t('agentIdentityPlaceholder')}
+              aria-label={i18nService.t('agentIdentity')}
+              className="h-full min-h-[320px] w-full resize-none rounded-lg border border-transparent bg-transparent px-1 py-1 text-sm leading-6 text-foreground placeholder:text-secondary/45 focus:border-border focus:outline-none"
+            />
+          )}
+
+          {activeTab === AgentDetailTab.Skills && (
             <AgentSkillSelector selectedSkillIds={skillIds} onChange={setSkillIds} />
           )}
 
-          {activeTab === 'im' && (
+          {activeTab === AgentDetailTab.Im && (
             <div>
               <p className="text-xs text-secondary/60 mb-4">
-                {i18nService.t('agentIMBindHint') || 'Select IM channels this Agent responds to'}
+                {i18nService.t('agentIMBindHint')}
               </p>
               <div className="space-y-1">
                 {PlatformRegistry.platforms
@@ -483,22 +455,30 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="px-4 py-2 text-sm font-medium rounded-lg text-secondary hover:bg-surface-raised transition-colors"
-          >
-            {i18nService.t('cancel') || 'Cancel'}
-          </button>
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={!name.trim() || creating}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {creating ? (i18nService.t('creating') || 'Creating...') : (i18nService.t('create') || 'Create')}
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-border">
+          <AgentDetailToolbar
+            model={model}
+            onModelChange={setModel}
+            workingDirectory={workingDirectory}
+            onWorkingDirectoryChange={setWorkingDirectory}
+          />
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="px-4 py-2 text-sm font-medium rounded-lg text-secondary hover:bg-surface-raised transition-colors"
+            >
+              {i18nService.t('cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={!name.trim() || creating}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {creating ? i18nService.t('creating') : i18nService.t('create')}
+            </button>
+          </div>
         </div>
     </Modal>
 

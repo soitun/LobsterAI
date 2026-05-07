@@ -15,12 +15,11 @@ import { resolveOpenClawModelRef, toOpenClawModelRef } from '../../utils/opencla
 import { getVisibleIMPlatforms } from '../../utils/regionFilter';
 import Modal from '../common/Modal';
 import TrashIcon from '../icons/TrashIcon';
-import ModelSelector from '../ModelSelector';
+import AgentDetailToolbar from './AgentDetailToolbar';
 import AgentSkillSelector from './AgentSkillSelector';
-import AgentWorkingDirectoryField from './AgentWorkingDirectoryField';
+import { AgentDetailTab } from './constants';
 import EmojiPicker from './EmojiPicker';
 
-type SettingsTab = 'basic' | 'skills' | 'im';
 type MultiInstancePlatform = 'dingtalk' | 'feishu' | 'qq' | 'wecom' | 'nim' | 'telegram' | 'discord' | 'popo';
 type MultiInstanceConfig = DingTalkInstanceConfig | FeishuInstanceConfig | QQInstanceConfig | WecomInstanceConfig | NimInstanceConfig | TelegramInstanceConfig | DiscordInstanceConfig | PopoInstanceConfig;
 type MultiInstanceStatus = DingTalkInstanceStatus | FeishuInstanceStatus | QQInstanceStatus | WecomInstanceStatus | NimInstanceStatus | TelegramInstanceStatus | DiscordInstanceStatus | PopoInstanceStatus;
@@ -53,7 +52,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
-  const [activeTab, setActiveTab] = useState<SettingsTab>('basic');
+  const [activeTab, setActiveTab] = useState<AgentDetailTab>(AgentDetailTab.Prompt);
 
   // IM binding state — keys are 'telegram' (single) or 'dingtalk:<instanceId>' (multi)
   const [imConfig, setImConfig] = useState<IMGatewayConfig | null>(null);
@@ -67,13 +66,14 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
     systemPrompt: '',
     identity: '',
     icon: '',
+    model: '',
     workingDirectory: '',
     skillIds: [] as string[],
   });
 
   useEffect(() => {
     if (!agentId) return;
-    setActiveTab('basic');
+    setActiveTab(AgentDetailTab.Prompt);
     setShowDeleteConfirm(false);
     setShowUnsavedConfirm(false);
     window.electron?.agents?.get(agentId).then((a) => {
@@ -93,6 +93,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
           systemPrompt: a.systemPrompt,
           identity: a.identity,
           icon: a.icon,
+          model: a.model ?? '',
           workingDirectory: a.workingDirectory ?? '',
           skillIds: a.skillIds ?? [],
         };
@@ -123,11 +124,12 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
     if (systemPrompt !== init.systemPrompt) return true;
     if (identity !== init.identity) return true;
     if (icon !== init.icon) return true;
+    if ((model ? toOpenClawModelRef(model) : '') !== init.model) return true;
     if (workingDirectory !== init.workingDirectory) return true;
     if (skillIds.length !== init.skillIds.length || skillIds.some((id, i) => id !== init.skillIds[i])) return true;
     if (boundKeys.size !== initialBoundKeys.size || [...boundKeys].some((k) => !initialBoundKeys.has(k))) return true;
     return false;
-  }, [name, description, systemPrompt, identity, icon, workingDirectory, skillIds, boundKeys, initialBoundKeys]);
+  }, [name, description, systemPrompt, identity, icon, model, workingDirectory, skillIds, boundKeys, initialBoundKeys]);
 
   if (!agentId) return null;
 
@@ -248,10 +250,11 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
 
   const isMainAgent = agentId === 'main';
 
-  const tabs: { key: SettingsTab; label: string }[] = [
-    { key: 'basic', label: i18nService.t('agentTabBasic') || 'Basic Info' },
-    { key: 'skills', label: i18nService.t('agentTabSkills') || 'Skills' },
-    { key: 'im', label: i18nService.t('agentTabIM') || 'IM Channels' },
+  const tabs: { key: AgentDetailTab; label: string }[] = [
+    { key: AgentDetailTab.Prompt, label: i18nService.t('agentTabPrompt') },
+    { key: AgentDetailTab.Identity, label: i18nService.t('agentIdentity') },
+    { key: AgentDetailTab.Skills, label: i18nService.t('agentTabSkills') },
+    { key: AgentDetailTab.Im, label: i18nService.t('agentTabIM') },
   ];
 
   const renderToggle = (isOn: boolean) => (
@@ -404,18 +407,44 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
 
   return (
     <>
-    <Modal onClose={handleClose} className="w-full max-w-2xl mx-4 rounded-xl shadow-xl bg-surface border border-border max-h-[80vh] flex flex-col">
-        {/* Header: agent icon + name + close */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">{icon || '🤖'}</span>
-            <h3 className="text-base font-semibold text-foreground">
-              {name || (i18nService.t('agentSettings') || 'Agent Settings')}
-            </h3>
+    <Modal onClose={handleClose} className="w-full max-w-3xl mx-4 rounded-xl shadow-xl bg-surface border border-border max-h-[82vh] flex flex-col overflow-hidden">
+        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <EmojiPicker value={icon} onChange={setIcon} />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={i18nService.t('agentNamePlaceholder')}
+                aria-label={i18nService.t('agentName')}
+                className="min-w-0 flex-1 bg-transparent text-base font-semibold text-foreground placeholder:text-secondary/40 focus:outline-none"
+              />
+            </div>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={i18nService.t('agentDescriptionPlaceholder')}
+              aria-label={i18nService.t('agentDescription')}
+              className="mt-2 w-full bg-transparent text-sm text-secondary placeholder:text-secondary/50 focus:outline-none"
+            />
           </div>
-          <button type="button" onClick={handleClose} className="p-1 rounded-lg hover:bg-surface-raised">
-            <XMarkIcon className="h-5 w-5 text-secondary" />
-          </button>
+          <div className="flex items-center gap-1">
+            {!isMainAgent && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <TrashIcon className="h-4 w-4" />
+                {i18nService.t('delete')}
+              </button>
+            )}
+            <button type="button" onClick={handleClose} className="p-2 rounded-lg hover:bg-surface-raised transition-colors">
+              <XMarkIcon className="h-5 w-5 text-secondary" />
+            </button>
+          </div>
         </div>
 
         {/* Tab bar */}
@@ -440,81 +469,35 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
         </div>
 
         {/* Tab content */}
-        <div className="px-5 py-4 overflow-y-auto flex-1 min-h-[300px]">
-          {activeTab === 'basic' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('agentName') || 'Name'}
-                </label>
-                <div className="flex gap-2">
-                  <EmojiPicker value={icon} onChange={setIcon} />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-lg border border-border bg-transparent text-foreground text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('agentDescription') || 'Description'}
-                </label>
-                <input
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-foreground text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('systemPrompt') || 'System Prompt'}
-                </label>
-                <textarea
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  rows={4}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-foreground text-sm resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('agentIdentity') || 'Identity'}
-                </label>
-                <textarea
-                  value={identity}
-                  onChange={(e) => setIdentity(e.target.value)}
-                  rows={3}
-                  placeholder={i18nService.t('agentIdentityPlaceholder') || 'Identity description (IDENTITY.md)...'}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-foreground text-sm resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  {i18nService.t('agentDefaultModel') || 'Agent Default Model'}
-                </label>
-                <ModelSelector
-                  value={model}
-                  onChange={setModel}
-                />
-              </div>
-              <AgentWorkingDirectoryField
-                value={workingDirectory}
-                onChange={setWorkingDirectory}
-              />
-            </div>
+        <div className="px-5 py-4 overflow-y-auto flex-1 min-h-[360px]">
+          {activeTab === AgentDetailTab.Prompt && (
+            <textarea
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder={i18nService.t('agentSystemPromptPlaceholder')}
+              aria-label={i18nService.t('systemPrompt')}
+              className="h-full min-h-[320px] w-full resize-none rounded-lg border border-transparent bg-transparent px-1 py-1 text-sm leading-6 text-foreground placeholder:text-secondary/45 focus:border-border focus:outline-none"
+            />
           )}
 
-          {activeTab === 'skills' && (
+          {activeTab === AgentDetailTab.Identity && (
+            <textarea
+              value={identity}
+              onChange={(e) => setIdentity(e.target.value)}
+              placeholder={i18nService.t('agentIdentityPlaceholder')}
+              aria-label={i18nService.t('agentIdentity')}
+              className="h-full min-h-[320px] w-full resize-none rounded-lg border border-transparent bg-transparent px-1 py-1 text-sm leading-6 text-foreground placeholder:text-secondary/45 focus:border-border focus:outline-none"
+            />
+          )}
+
+          {activeTab === AgentDetailTab.Skills && (
             <AgentSkillSelector selectedSkillIds={skillIds} onChange={setSkillIds} />
           )}
 
-          {activeTab === 'im' && (
+          {activeTab === AgentDetailTab.Im && (
             <div>
               <p className="text-xs text-secondary/60 mb-4">
-                {i18nService.t('agentIMBindHint') || 'Select IM channels this Agent responds to'}
+                {i18nService.t('agentIMBindHint')}
               </p>
               <div className="space-y-1">
                 {PlatformRegistry.platforms
@@ -531,27 +514,21 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-4 border-t border-border">
-          <div>
-            {!isMainAgent && (
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(true)}
-                className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              >
-                <TrashIcon className="h-4 w-4" />
-                {i18nService.t('delete')}
-              </button>
-            )}
-          </div>
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-border">
+          <AgentDetailToolbar
+            model={model}
+            onModelChange={setModel}
+            workingDirectory={workingDirectory}
+            onWorkingDirectoryChange={setWorkingDirectory}
+          />
+          <div className="flex shrink-0 gap-2">
             {onSwitchAgent && agentId !== currentAgentId && (
               <button
                 type="button"
                 onClick={() => onSwitchAgent(agentId)}
                 className="px-4 py-2 text-sm font-medium rounded-lg border border-primary text-primary hover:bg-primary/10 transition-colors"
               >
-                {i18nService.t('switchToAgent') || 'Use this Agent'}
+                {i18nService.t('switchToAgent')}
               </button>
             )}
             <button
@@ -559,7 +536,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
               onClick={handleClose}
               className="px-4 py-2 text-sm font-medium rounded-lg text-secondary hover:bg-surface-raised transition-colors"
             >
-              {i18nService.t('cancel') || 'Cancel'}
+              {i18nService.t('cancel')}
             </button>
             <button
               type="button"
@@ -567,7 +544,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
               disabled={!name.trim() || saving}
               className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {saving ? (i18nService.t('saving') || 'Saving...') : (i18nService.t('save') || 'Save')}
+              {saving ? i18nService.t('saving') : i18nService.t('save')}
             </button>
           </div>
         </div>
