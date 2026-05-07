@@ -2400,7 +2400,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
                 resolveLocalFilePath={resolveLocalFilePath}
                 mapDisplayText={mapDisplayText}
                 showTypingIndicator={showTypingIndicator}
-                showCopyButtons={!isStreaming}
+                showCopyButtons={!isStreaming || !isLastTurn}
               />
             </div>
           )}

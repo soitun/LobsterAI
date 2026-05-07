@@ -125,7 +125,6 @@ export const extractGatewayHistoryEntry = (message: unknown): GatewayHistoryEntr
     return null;
   }
 
-
   const text = extractGatewayMessageText(message).trim();
   if (!text) {
     return null;
