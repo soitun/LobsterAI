@@ -736,13 +736,13 @@ const App: React.FC = () => {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => window.electron.appInfo.relaunch()}
-                className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl shadow-md transition-colors text-sm font-medium"
+                className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl transition-colors text-sm font-medium"
               >
                 {i18nService.t('restartApp')}
               </button>
               <button
                 onClick={() => handleShowSettings()}
-                className="px-6 py-2.5 text-secondary hover:bg-surface-raised rounded-xl transition-colors text-sm font-medium"
+                className="px-6 py-2.5 border border-border text-foreground hover:bg-surface-raised rounded-xl transition-colors text-sm font-medium"
               >
                 {i18nService.t('openSettings')}
               </button>
