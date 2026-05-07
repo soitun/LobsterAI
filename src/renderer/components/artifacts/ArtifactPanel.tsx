@@ -23,7 +23,7 @@ import CodeRenderer from './renderers/CodeRenderer';
 
 const t = (key: string) => i18nService.t(key);
 
-const BROWSER_OPENABLE_TYPES = new Set<ArtifactType>(['html', 'svg', 'mermaid', 'react']);
+const BROWSER_OPENABLE_TYPES = new Set<ArtifactType>(['html', 'svg', 'mermaid']);
 
 const SYSTEM_OPENABLE_TYPES = new Set<ArtifactType>(['document']);
 
@@ -35,8 +35,6 @@ function buildBrowserHtml(artifact: Artifact): string | null {
       return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${artifact.title}</title><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f5f5}</style></head><body>${artifact.content}</body></html>`;
     case 'mermaid':
       return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${artifact.title}</title><script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"><\/script><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fff;font-family:system-ui,sans-serif}</style></head><body><pre class="mermaid">${escapeHtml(artifact.content)}</pre><script>mermaid.initialize({startOnLoad:true,theme:'default',securityLevel:'loose'});<\/script></body></html>`;
-    case 'react':
-      return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${artifact.title}</title><script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"><\/script><script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"><\/script><script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"><\/script><script src="https://cdn.tailwindcss.com"><\/script><style>body{margin:0;font-family:system-ui,sans-serif}#root{min-height:100vh}.react-render-error{color:#ef4444;padding:16px;font-family:monospace;white-space:pre-wrap}</style><script>var useState=React.useState;var useEffect=React.useEffect;var useRef=React.useRef;var useMemo=React.useMemo;var useCallback=React.useCallback;var useContext=React.useContext;var useReducer=React.useReducer;var Fragment=React.Fragment;var createElement=React.createElement;var forwardRef=React.forwardRef;var memo=React.memo;var createContext=React.createContext;<\/script></head><body><div id="root"></div><script type="text/babel">try{${artifact.content.replace(/import\s+.*?['"][^'"]+['"]\s*;?\s*/g, '').replace(/export\s+default\s+function\s+/, 'function ').replace(/export\s+default\s+class\s+/, 'class ').replace(/export\s+default\s+(\w+)\s*;?/, '').replace(/export\s+(?=(?:const|let|var|function|class)\s)/g, '')}; var __C__=typeof App!=='undefined'?App:null; if(__C__)ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(__C__));else document.getElementById('root').innerHTML='<div class=\"react-render-error\">Component not found</div>';}catch(e){document.getElementById('root').innerHTML='<div class=\"react-render-error\">'+e.message+'</div>';}<\/script></body></html>`;
     default:
       return null;
   }
@@ -51,7 +49,6 @@ const TYPE_LABELS: Record<ArtifactType, string> = {
   svg: 'Svg',
   image: 'Image',
   mermaid: 'Mermaid',
-  react: 'React',
   code: 'Code',
   markdown: 'Markdown',
   text: 'Text',
@@ -63,7 +60,6 @@ const TYPE_ICONS: Record<ArtifactType, string> = {
   svg: '🎨',
   image: '🖼',
   mermaid: '📊',
-  react: '⚛',
   code: '<>',
   markdown: '📝',
   text: '📄',

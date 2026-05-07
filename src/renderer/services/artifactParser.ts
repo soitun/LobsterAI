@@ -5,9 +5,8 @@ const LANGUAGE_TO_ARTIFACT_TYPE: Record<string, ArtifactType> = {
   html: 'html',
   svg: 'svg',
   mermaid: 'mermaid',
-  jsx: 'react',
-  tsx: 'react',
-  react: 'react',
+  jsx: 'code',
+  tsx: 'code',
   markdown: 'markdown',
   md: 'markdown',
   text: 'text',
@@ -26,8 +25,8 @@ const EXTENSION_TO_ARTIFACT_TYPE: Record<string, ArtifactType> = {
   '.webp': 'image',
   '.mermaid': 'mermaid',
   '.mmd': 'mermaid',
-  '.jsx': 'react',
-  '.tsx': 'react',
+  '.jsx': 'code',
+  '.tsx': 'code',
   '.css': 'code',
   '.md': 'markdown',
   '.txt': 'text',
@@ -38,10 +37,11 @@ const EXTENSION_TO_ARTIFACT_TYPE: Record<string, ArtifactType> = {
   '.docx': 'document',
   '.xlsx': 'document',
   '.pptx': 'document',
+  '.pdf': 'document',
 };
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
-const BINARY_DOCUMENT_EXTENSIONS = new Set(['.docx', '.xlsx', '.pptx']);
+const BINARY_DOCUMENT_EXTENSIONS = new Set(['.docx', '.xlsx', '.pptx', '.pdf']);
 
 export function getArtifactTypeFromLanguage(lang: string): ArtifactType | null {
   return LANGUAGE_TO_ARTIFACT_TYPE[lang.toLowerCase()] ?? null;
@@ -106,7 +106,7 @@ export function parseCodeBlockArtifacts(
 
 const FILE_LINK_RE = /\[([^\]]+)\]\(file:\/\/([^)]+)\)/g;
 
-const BARE_FILE_PATH_RE = /(?:^|[\s"'`(])(\/?(?:[^\s"'`()\[\]]+\/)*[^\s"'`()\[\]]+\.(?:docx|xlsx|pptx|md|txt|log|csv))(?:[\s"'`)]|$)/gm;
+const BARE_FILE_PATH_RE = /(?:^|[\s"'`(])(\/?(?:[^\s"'`()\[\]]+\/)*[^\s"'`()\[\]]+\.(?:docx|xlsx|pptx|pdf|md|txt|log|csv))(?:[\s"'`)]|$)/gm;
 
 export function parseFilePathsFromText(
   messageContent: string,
@@ -212,8 +212,6 @@ function generateTitle(type: ArtifactType, language: string, content: string): s
       return 'SVG Image';
     case 'mermaid':
       return 'Mermaid Diagram';
-    case 'react':
-      return 'React Component';
     case 'image':
       return 'Image';
     case 'markdown':

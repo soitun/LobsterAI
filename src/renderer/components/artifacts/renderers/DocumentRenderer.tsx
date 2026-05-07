@@ -167,15 +167,17 @@ const DocxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
     <div ref={wrapperRef} className="h-full overflow-auto p-6 bg-[#f5f5f5]">
       <div ref={containerRef} className="docx-container mx-auto" />
       <style>{`
-        .docx-container .docx-preview {
-          background: white;
+        .docx-container .docx-preview-wrapper {
+          background: transparent !important;
+        }
+        .docx-container section.docx-preview {
+          background: white !important;
           color: #000;
           box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-          margin: 0 auto 16px;
+          margin: 0 auto 16px !important;
           border-radius: 2px;
-        }
-        .docx-container .docx-preview section {
-          padding: 20px 40px !important;
+          padding: 60px 50px !important;
+          box-sizing: border-box;
         }
       `}</style>
     </div>
@@ -189,6 +191,12 @@ interface CellData {
   bgColor?: string;
   fontColor?: string;
   bold?: boolean;
+  colSpan?: number;
+  hidden?: boolean;
+}
+
+interface MergeRange {
+  sr: number; sc: number; er: number; ec: number;
 }
 
 interface SheetData {
@@ -200,6 +208,22 @@ interface SheetData {
 function isCsvOrTsv(fileName: string): boolean {
   const ext = fileName.toLowerCase();
   return ext.endsWith('.csv') || ext.endsWith('.tsv') || ext.endsWith('.txt');
+}
+
+function applyMerges(rows: CellData[][], merges: MergeRange[]) {
+  for (const m of merges) {
+    if (rows[m.sr] && rows[m.sr][m.sc]) {
+      rows[m.sr][m.sc].colSpan = m.ec - m.sc + 1;
+    }
+    for (let r = m.sr; r <= m.er; r++) {
+      for (let c = m.sc; c <= m.ec; c++) {
+        if (r === m.sr && c === m.sc) continue;
+        if (rows[r] && rows[r][c]) {
+          rows[r][c].hidden = true;
+        }
+      }
+    }
+  }
 }
 
 const ROW_HEIGHT = 28;
@@ -258,6 +282,12 @@ const XlsxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
             rows.push(row);
           }
 
+          const merges: MergeRange[] = (sheet['!merges'] || []).map((m: { s: { r: number; c: number }; e: { r: number; c: number } }) => ({
+            sr: m.s.r - range.s.r, sc: m.s.c - range.s.c,
+            er: m.e.r - range.s.r, ec: m.e.c - range.s.c,
+          }));
+          applyMerges(rows, merges);
+
           return { name, rows, colCount };
         });
 
@@ -290,6 +320,9 @@ const XlsxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
   const currentSheet = sheets[activeSheet];
   const headerRow = currentSheet.rows[0];
   const bodyRows = currentSheet.rows.slice(1);
+  const colCount = currentSheet.colCount;
+  const COL_WIDTH = Math.max(100, Math.min(200, Math.floor(800 / colCount)));
+  const totalWidth = COL_WIDTH * colCount;
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white text-[#383a42]">
@@ -312,29 +345,38 @@ const XlsxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
         </div>
       )}
 
-      {/* Header */}
-      {headerRow && (
-        <div className="shrink-0 flex border-b border-[#e0e0e0] bg-[#f0f2f5]" style={{ height: HEADER_HEIGHT }}>
-          {headerRow.map((cell, i) => (
-            <div
-              key={i}
-              className="px-3 flex items-center text-xs font-medium text-[#383a42] border-r border-[#e0e0e0] last:border-r-0 min-w-[80px] max-w-[200px] truncate"
-              style={{
-                backgroundColor: cell.bgColor || undefined,
-                color: cell.fontColor || undefined,
-                fontWeight: cell.bold ? 700 : 600,
-              }}
-              title={cell.v}
-            >
-              {cell.v}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Virtual scrolling body */}
+      {/* Scrollable table area */}
       <div ref={parentRef} className="flex-1 overflow-auto">
-        <VirtualRows rows={bodyRows} parentRef={parentRef} />
+        <div style={{ width: totalWidth, minWidth: '100%' }}>
+          {/* Header */}
+          {headerRow && (
+            <div className="flex sticky top-0 z-10 border-b border-[#e0e0e0] bg-[#f0f2f5]" style={{ height: HEADER_HEIGHT }}>
+              {headerRow.map((cell, i) => {
+                if (cell.hidden) return null;
+                const span = cell.colSpan || 1;
+                return (
+                  <div
+                    key={i}
+                    className="px-3 flex items-center text-xs font-medium text-[#383a42] border-r border-[#e0e0e0] last:border-r-0 truncate"
+                    style={{
+                      width: COL_WIDTH * span,
+                      minWidth: COL_WIDTH * span,
+                      backgroundColor: cell.bgColor || undefined,
+                      color: cell.fontColor || undefined,
+                      fontWeight: cell.bold ? 700 : 600,
+                    }}
+                    title={cell.v}
+                  >
+                    {cell.v}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Virtual scrolling body */}
+          <VirtualRows rows={bodyRows} parentRef={parentRef} colWidth={COL_WIDTH} />
+        </div>
       </div>
 
       {/* Row count */}
@@ -348,7 +390,8 @@ const XlsxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
 const VirtualRows: React.FC<{
   rows: CellData[][];
   parentRef: React.RefObject<HTMLDivElement | null>;
-}> = ({ rows, parentRef }) => {
+  colWidth: number;
+}> = ({ rows, parentRef, colWidth }) => {
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
@@ -369,27 +412,201 @@ const VirtualRows: React.FC<{
               top: 0,
               transform: `translateY(${virtualRow.start}px)`,
               height: ROW_HEIGHT,
-              width: '100%',
             }}
           >
-            {row.map((cell, ci) => (
-              <div
-                key={ci}
-                className="px-3 flex items-center border-r border-[#e0e0e0]/30 last:border-r-0 min-w-[80px] max-w-[200px] truncate h-full"
-                style={{
-                  backgroundColor: cell.bgColor || undefined,
-                  color: cell.fontColor || undefined,
-                  fontWeight: cell.bold ? 700 : undefined,
-                }}
-                title={cell.v}
-              >
-                {cell.v}
-              </div>
-            ))}
+            {row.map((cell, ci) => {
+              if (cell.hidden) return null;
+              const span = cell.colSpan || 1;
+              return (
+                <div
+                  key={ci}
+                  className="px-3 flex items-center border-r border-[#e0e0e0]/30 last:border-r-0 truncate h-full"
+                  style={{
+                    width: colWidth * span,
+                    minWidth: colWidth * span,
+                    backgroundColor: cell.bgColor || undefined,
+                    color: cell.fontColor || undefined,
+                    fontWeight: cell.bold ? 700 : undefined,
+                  }}
+                  title={cell.v}
+                >
+                  {cell.v}
+                </div>
+              );
+            })}
           </div>
         );
       })}
     </div>
+  );
+};
+
+// --- Pdf Sub-Renderer (pdfjs-dist, lazy page rendering) ---
+
+const PDF_PAGE_GAP = 16;
+
+const PdfSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
+  const { data, loading, error: loadError } = useFileContent(artifact);
+  const [pageCount, setPageCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [renderWidth, setRenderWidth] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Measure container width once it's laid out (debounced)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const measure = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const w = container.clientWidth - 48;
+        if (w > 0 && Math.abs(w - renderWidth) > 5) setRenderWidth(w);
+      }, 200);
+    };
+
+    // Initial measure without debounce
+    const w = container.clientWidth - 48;
+    if (w > 0) setRenderWidth(w);
+
+    const ro = new ResizeObserver(measure);
+    ro.observe(container);
+    return () => { ro.disconnect(); if (timer) clearTimeout(timer); };
+  }, [renderWidth, pdfDoc]);
+
+  // Load PDF document
+  useEffect(() => {
+    if (loadError) { setError(loadError); return; }
+    if (!data) return;
+
+    let cancelled = false;
+
+    const loadPdf = async () => {
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).href;
+
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(data) }).promise;
+        if (cancelled) return;
+
+        setPdfDoc(pdf);
+        setPageCount(pdf.numPages);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      }
+    };
+
+    loadPdf();
+    return () => { cancelled = true; };
+  }, [data, loadError]);
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full text-red-500 text-sm p-4">
+        {t('artifactDocumentError')}: {error}
+      </div>
+    );
+  }
+
+  if (loading || !pdfDoc) {
+    return (
+      <div className="flex items-center justify-center h-full text-muted text-sm">
+        {t('artifactDocumentLoading')}
+      </div>
+    );
+  }
+
+  const pages = Array.from({ length: pageCount }, (_, i) => i + 1);
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden bg-[#f5f5f5]">
+      <div className="px-3 py-1.5 text-xs text-[#999] border-b border-[#e0e0e0] shrink-0">
+        {pageCount} {t('artifactPdfPageCount')}
+      </div>
+      <div ref={containerRef} className="flex-1 overflow-auto p-6">
+        {renderWidth > 0 && pages.map(pageNum => (
+          <div key={pageNum} style={{ marginBottom: PDF_PAGE_GAP }}>
+            <PdfPageCanvas pdfDoc={pdfDoc} pageNumber={pageNum} width={renderWidth} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const PdfPageCanvas: React.FC<{
+  pdfDoc: unknown;
+  pageNumber: number;
+  width: number;
+}> = ({ pdfDoc, pageNumber, width }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !pdfDoc || width <= 0) return;
+
+    // Cancel any in-progress render on this canvas
+    if (renderTaskRef.current) {
+      renderTaskRef.current.cancel();
+      renderTaskRef.current = null;
+    }
+
+    let cancelled = false;
+
+    const renderPage = async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const page = await (pdfDoc as any).getPage(pageNumber);
+        if (cancelled) return;
+
+        const viewport = page.getViewport({ scale: 1 });
+        const scale = width / viewport.width;
+        const scaledViewport = page.getViewport({ scale });
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(scaledViewport.width * dpr);
+        canvas.height = Math.floor(scaledViewport.height * dpr);
+        canvas.style.width = `${Math.floor(scaledViewport.width)}px`;
+        canvas.style.height = `${Math.floor(scaledViewport.height)}px`;
+        setHeight(Math.floor(scaledViewport.height));
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx || cancelled) return;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const renderTask = page.render({ canvasContext: ctx, viewport: scaledViewport });
+        renderTaskRef.current = renderTask;
+
+        await renderTask.promise;
+        renderTaskRef.current = null;
+      } catch (e) {
+        // Ignore cancellation errors
+        if (e instanceof Error && e.message.includes('Rendering cancelled')) return;
+      }
+    };
+
+    renderPage();
+    return () => {
+      cancelled = true;
+      if (renderTaskRef.current) {
+        renderTaskRef.current.cancel();
+        renderTaskRef.current = null;
+      }
+    };
+  }, [pdfDoc, pageNumber, width]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="mx-auto block bg-white shadow-md rounded-sm"
+      style={{ minHeight: height || 200 }}
+    />
   );
 };
 
@@ -755,6 +972,8 @@ const DocumentRenderer: React.FC<DocumentRendererProps> = ({ artifact }) => {
     case '.csv':
     case '.tsv':
       return <XlsxSubRenderer artifact={artifact} />;
+    case '.pdf':
+      return <PdfSubRenderer artifact={artifact} />;
     case '.pptx':
       return <PptxSubRenderer artifact={artifact} />;
     default:

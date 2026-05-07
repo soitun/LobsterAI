@@ -61,8 +61,6 @@
   },
   "scripts": {
     "dev": "vite",
-    "copy:sandbox-vendor": "node scripts/copy-sandbox-vendor.cjs",
-    "prebuild": "node scripts/copy-sandbox-vendor.cjs",
     "build": "tsc && vite build",
     "lint": "eslint src/",
     "format": "prettier --write .",
@@ -116,7 +114,6 @@
     "fix:mac-icon": "bash scripts/fix-mac-icon-display.sh"
   },
   "dependencies": {
-    "@babel/standalone": "^7.29.2",
     "@electron/remote": "^2.0.12",
     "@headlessui/react": "^1.7.18",
     "@heroicons/react": "^2.1.1",
@@ -143,6 +140,7 @@
     "mermaid": "^10.9.5",
     "nim-web-sdk-ng": "10.9.77-alpha.4",
     "npm": "^11.11.0",
+    "pdfjs-dist": "^4.10.38",
     "pptx-preview": "^1.0.7",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",

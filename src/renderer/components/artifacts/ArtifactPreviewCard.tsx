@@ -42,15 +42,6 @@ const MermaidIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-const ReactIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <ellipse cx="12" cy="12" rx="10" ry="4" />
-    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)" />
-    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)" />
-    <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-  </svg>
-);
-
 const MarkdownIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -81,7 +72,6 @@ const TYPE_ICON_MAP: Record<ArtifactType, React.FC<{ className?: string }>> = {
   svg: SvgIcon,
   image: ImageIcon,
   mermaid: MermaidIcon,
-  react: ReactIcon,
   code: GlobeIcon,
   markdown: MarkdownIcon,
   text: TextIcon,
@@ -93,7 +83,6 @@ const TYPE_LABEL_KEY: Record<ArtifactType, string> = {
   svg: 'artifactTypeSvg',
   image: 'artifactTypeImage',
   mermaid: 'artifactTypeMermaid',
-  react: 'artifactTypeReact',
   code: 'artifactTypeHtml',
   markdown: 'artifactTypeMarkdown',
   text: 'artifactTypeText',
