@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { expect, test, vi } from 'vitest';
 
 vi.mock('electron', () => ({
@@ -355,7 +357,7 @@ test('continueSession sends the session cwd to OpenClaw chat.send', async () => 
 
   const chatSend = requests.find((request) => request.method === 'chat.send');
   expect(chatSend?.params).toMatchObject({
-    cwd: '/tmp/lobsterai-selected-project',
+    cwd: path.resolve('/tmp/lobsterai-selected-project'),
   });
 });
 

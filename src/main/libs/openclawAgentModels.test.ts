@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { describe, expect, test } from 'vitest';
 
 import {
@@ -110,7 +112,7 @@ describe('buildAgentEntry', () => {
 
     expect(result).toMatchObject({
       id: 'docs',
-      cwd: '/tmp/docs-project',
+      cwd: path.resolve('/tmp/docs-project'),
     });
   });
 });
