@@ -11,6 +11,7 @@ import { RootState } from '../../store';
 import type { Model } from '../../store/slices/modelSlice';
 import type { Agent } from '../../types/agent';
 import type { DingTalkInstanceConfig, DingTalkInstanceStatus, DiscordInstanceConfig, DiscordInstanceStatus, FeishuInstanceConfig, FeishuInstanceStatus, IMGatewayConfig, IMGatewayStatus, NimInstanceConfig, NimInstanceStatus, PopoInstanceConfig, PopoInstanceStatus, QQInstanceConfig, QQInstanceStatus, TelegramInstanceConfig, TelegramInstanceStatus, WecomInstanceConfig, WecomInstanceStatus } from '../../types/im';
+import { getAgentDisplayNameById, isDefaultAgentId } from '../../utils/agentDisplay';
 import { resolveOpenClawModelRef, toOpenClawModelRef } from '../../utils/openclawModelRef';
 import { getVisibleIMPlatforms } from '../../utils/regionFilter';
 import Modal from '../common/Modal';
@@ -242,12 +243,10 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
 
   /** Resolve agent name by id */
   const getAgentName = (aid: string): string | null => {
-    if (!aid || aid === 'main') return null;
-    const agent = agents.find((a) => a.id === aid);
-    return agent?.name || aid;
+    return getAgentDisplayNameById(aid, agents);
   };
 
-  const isMainAgent = agentId === 'main';
+  const isMainAgent = isDefaultAgentId(agentId);
 
   const tabs: { key: AgentDetailTab; label: string }[] = [
     { key: AgentDetailTab.Prompt, label: i18nService.t('agentTabPrompt') },

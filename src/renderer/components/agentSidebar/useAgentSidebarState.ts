@@ -89,6 +89,15 @@ export const toAgentSidebarTaskNode = (
   };
 };
 
+export const collapseAgentSidebarTaskList = (
+  expandedTaskListAgentIds: string[],
+  agentId: string,
+) => {
+  return expandedTaskListAgentIds.includes(agentId)
+    ? expandedTaskListAgentIds.filter((id) => id !== agentId)
+    : expandedTaskListAgentIds;
+};
+
 export const useAgentSidebarState = () => {
   const agents = useSelector((state: RootState) => state.agent.agents);
   const currentAgentId = useSelector((state: RootState) => state.agent.currentAgentId);
@@ -271,6 +280,7 @@ export const useAgentSidebarState = () => {
   }, [sessions]);
 
   const toggleAgentExpanded = useCallback((agentId: string) => {
+    setExpandedTaskListAgentIds((previous) => collapseAgentSidebarTaskList(previous, agentId));
     setExpandedAgentIds((previous) => {
       return previous.includes(agentId)
         ? previous.filter((id) => id !== agentId)
@@ -341,7 +351,7 @@ export const useAgentSidebarState = () => {
 
   const collapseTasks = useCallback((agentId: string) => {
     setExpandedTaskListAgentIds((previous) => {
-      return previous.filter((id) => id !== agentId);
+      return collapseAgentSidebarTaskList(previous, agentId);
     });
   }, []);
 

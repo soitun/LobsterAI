@@ -272,7 +272,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-2.5 pb-4">
+      <div className="scrollbar-hidden flex-1 overflow-y-auto px-2.5 pb-4">
         <MyAgentSidebarTree
           isBatchMode={isBatchMode}
           selectedIds={selectedIds}

@@ -1,6 +1,8 @@
 import React from 'react';
 
 import { i18nService } from '../../services/i18n';
+import { getAgentDisplayName, shouldUseDefaultAgentIcon } from '../../utils/agentDisplay';
+import DefaultAgentIcon from '../icons/DefaultAgentIcon';
 import AgentTaskRow from './AgentTaskRow';
 import ExpandAgentTasksRow from './ExpandAgentTasksRow';
 import type { AgentSidebarAgentNode, AgentSidebarTaskNode } from './types';
@@ -24,8 +26,16 @@ interface AgentTreeNodeProps {
 
 const getAgentAvatarText = (agent: AgentSidebarAgentNode) => {
   if (agent.icon?.trim()) return agent.icon;
-  const first = agent.name.trim().slice(0, 1);
+  const first = getAgentDisplayName(agent).trim().slice(0, 1);
   return first ? first.toUpperCase() : 'A';
+};
+
+const AgentAvatar: React.FC<{ agent: AgentSidebarAgentNode }> = ({ agent }) => {
+  if (shouldUseDefaultAgentIcon(agent)) {
+    return <DefaultAgentIcon className="h-5 w-5" />;
+  }
+
+  return <>{getAgentAvatarText(agent)}</>;
 };
 
 const AgentTreeNode: React.FC<AgentTreeNodeProps> = ({
@@ -55,10 +65,10 @@ const AgentTreeNode: React.FC<AgentTreeNodeProps> = ({
         aria-expanded={agent.isExpanded}
       >
         <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[15px] leading-none text-foreground">
-          {getAgentAvatarText(agent)}
+          <AgentAvatar agent={agent} />
         </span>
         <span className="min-w-0 flex-1 truncate font-medium">
-          {agent.name}
+          {getAgentDisplayName(agent)}
         </span>
       </button>
 

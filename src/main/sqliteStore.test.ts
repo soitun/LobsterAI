@@ -4,6 +4,8 @@ import os from 'os';
 import path from 'path';
 import { afterEach, expect, test, vi } from 'vitest';
 
+import { DefaultAgentProfile } from '../shared/agent';
+
 vi.mock('electron', () => ({
   app: {
     getAppPath: () => process.cwd(),
@@ -110,4 +112,18 @@ test('backfills agent working directories from legacy cowork config only once', 
   ]);
 
   reopenedStore.close();
+});
+
+test('upgrades legacy default agent name during migration', async () => {
+  const userDataPath = createTempUserDataPath();
+  createLegacyDatabase(userDataPath);
+
+  const store = await SqliteStore.create(userDataPath);
+  const row = store.getDatabase()
+    .prepare("SELECT name FROM agents WHERE id = 'main'")
+    .get() as { name: string };
+
+  expect(row.name).toBe(DefaultAgentProfile.Name);
+
+  store.close();
 });

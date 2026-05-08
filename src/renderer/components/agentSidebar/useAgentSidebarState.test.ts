@@ -5,7 +5,10 @@ import {
   CoworkSessionStatusValue,
   type CoworkSessionSummary,
 } from '../../types/cowork';
-import { sortAgentSidebarTasks } from './useAgentSidebarState';
+import {
+  collapseAgentSidebarTaskList,
+  sortAgentSidebarTasks,
+} from './useAgentSidebarState';
 
 const makeSession = (
   id: string,
@@ -33,4 +36,8 @@ test('sortAgentSidebarTasks keeps tasks ordered by creation time', () => {
     'middle',
     'older-running',
   ]);
+});
+
+test('collapseAgentSidebarTaskList resets one agent history list to preview mode', () => {
+  expect(collapseAgentSidebarTaskList(['agent-1', 'agent-2'], 'agent-1')).toEqual(['agent-2']);
 });

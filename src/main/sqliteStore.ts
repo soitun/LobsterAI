@@ -5,6 +5,7 @@ import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
 
+import { AgentId, DefaultAgentProfile, LegacyAgentName } from '../shared/agent';
 import { DB_FILENAME } from './appConstants';
 import {
   openSqliteDatabaseWithRecovery,
@@ -276,9 +277,11 @@ export class SqliteStore {
       // Column already exists or migration not needed.
     }
 
-    // Migration: Ensure default 'main' agent exists
+    // Migration: Ensure default agent exists and legacy display values are upgraded.
     try {
-      const mainAgent = this.db.prepare("SELECT id FROM agents WHERE id = 'main'").get();
+      const mainAgent = this.db
+        .prepare('SELECT id, name, icon FROM agents WHERE id = ?')
+        .get(AgentId.Main) as { id: string; name: string; icon: string } | undefined;
       if (!mainAgent) {
         const now = Date.now();
         // Read existing systemPrompt from cowork_config to inherit into main agent
@@ -297,13 +300,22 @@ export class SqliteStore {
           .prepare(
             `
           INSERT INTO agents (id, name, description, system_prompt, identity, model, icon, skill_ids, enabled, is_default, source, preset_id, created_at, updated_at)
-          VALUES ('main', 'main', '', ?, '', '', '', '[]', 1, 1, 'custom', '', ?, ?)
+          VALUES (?, ?, '', ?, '', '', '', '[]', 1, 1, 'custom', '', ?, ?)
         `,
           )
-          .run(existingSystemPrompt, now, now);
+          .run(AgentId.Main, DefaultAgentProfile.Name, existingSystemPrompt, now, now);
+      } else {
+        const normalizedName = mainAgent.name.trim();
+        const shouldUpgradeName = !normalizedName || normalizedName.toLowerCase() === LegacyAgentName.Main;
+        if (shouldUpgradeName) {
+          this.db
+            .prepare('UPDATE agents SET name = ?, updated_at = ? WHERE id = ?')
+            .run(DefaultAgentProfile.Name, Date.now(), AgentId.Main);
+          this.didRunMigration = true;
+        }
       }
     } catch (error) {
-      console.warn('Failed to ensure main agent:', error);
+      console.warn('[SqliteStore] failed to ensure default agent:', error);
     }
 
     // Migration: Backfill agent working directories from the legacy global cwd once.

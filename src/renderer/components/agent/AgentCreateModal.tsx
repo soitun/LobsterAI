@@ -10,6 +10,7 @@ import { imService } from '../../services/im';
 import type { RootState } from '../../store';
 import type { Model } from '../../store/slices/modelSlice';
 import type { DingTalkInstanceConfig, DiscordInstanceConfig, FeishuInstanceConfig, IMGatewayConfig, PopoInstanceConfig, QQInstanceConfig, WecomInstanceConfig } from '../../types/im';
+import { getAgentDisplayNameById } from '../../utils/agentDisplay';
 import { toOpenClawModelRef } from '../../utils/openclawModelRef';
 import { getVisibleIMPlatforms } from '../../utils/regionFilter';
 import Modal from '../common/Modal';
@@ -201,9 +202,7 @@ const AgentCreateModal: React.FC<AgentCreateModalProps> = ({ isOpen, onClose }) 
 
   /** Resolve agent name by id */
   const getAgentName = (aid: string): string | null => {
-    if (!aid || aid === 'main') return null;
-    const agent = agents.find((a) => a.id === aid);
-    return agent?.name || aid;
+    return getAgentDisplayNameById(aid, agents);
   };
 
   const tabs: { key: AgentDetailTab; label: string }[] = [

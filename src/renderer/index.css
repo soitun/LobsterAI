@@ -115,6 +115,15 @@ body {
   background-color: var(--lobster-scroll-thumb-hover);
 }
 
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 /* Style for select options to match theme */
 option {
   background-color: var(--lobster-surface);

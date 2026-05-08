@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { buildScheduledTaskEnginePrompt } from '../../scheduledTask/enginePrompt';
+import { AgentId, DefaultAgentProfile } from '../../shared/agent';
 import {
   AuthType,
   OpenClawApi as OpenClawApiConst,
@@ -2304,10 +2305,10 @@ export class OpenClawConfigSync {
     };
     const configuredAgents = this.getAgents?.() ?? [];
     const agentById = new Map(configuredAgents.map(agent => [agent.id, agent]));
-    if (!agentById.has('main')) {
-      agentById.set('main', {
-        id: 'main',
-        name: 'main',
+    if (!agentById.has(AgentId.Main)) {
+      agentById.set(AgentId.Main, {
+        id: AgentId.Main,
+        name: DefaultAgentProfile.Name,
         description: '',
         systemPrompt: '',
         identity: '',
@@ -2587,14 +2588,17 @@ export class OpenClawConfigSync {
     availableProviders?: Record<string, { models: Array<{ id: string }> }>,
   ): { list?: Array<Record<string, unknown>> } {
     const agents = this.getAgents?.() ?? [];
-    const mainAgent = agents.find(agent => agent.id === 'main');
+    const mainAgent = agents.find(agent => agent.id === AgentId.Main);
 
     const list: Array<Record<string, unknown>> = [
       mainAgent
         ? buildAgentEntry(mainAgent, defaultPrimaryModel, { availableProviders })
         : {
-            id: 'main',
+            id: AgentId.Main,
             default: true,
+            identity: {
+              name: DefaultAgentProfile.Name,
+            },
             model: {
               primary: defaultPrimaryModel,
             },

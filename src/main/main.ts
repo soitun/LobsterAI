@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron';
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, powerSaveBlocker, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, powerSaveBlocker, protocol, screen, session, shell } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -100,6 +100,13 @@ import { getSkillServiceManager } from './skillServices';
 import { SqliteStore } from './sqliteStore';
 import { StartupProfiler } from './startupProfiler';
 import { createTray, destroyTray, updateTrayMenu } from './trayManager';
+import {
+  AppWindowStoreKey,
+  MIN_APP_WINDOW_HEIGHT,
+  MIN_APP_WINDOW_WIDTH,
+  resolveInitialAppWindowState,
+  type WindowRectangle,
+} from './windowState';
 
 const gwDiagTs = (): string => {
   const d = new Date();
@@ -1848,7 +1855,9 @@ let isQuitting = false;
 // 存储活跃的流式请求控制器
 const activeStreamControllers = new Map<string, AbortController>();
 let lastReloadAt = 0;
+let windowStateSaveTimer: ReturnType<typeof setTimeout> | null = null;
 const MIN_RELOAD_INTERVAL_MS = 5000;
+const WINDOW_STATE_SAVE_DEBOUNCE_MS = 300;
 type AppConfigSettings = {
   theme?: string;
   language?: string;
@@ -1935,6 +1944,45 @@ const emitWindowState = () => {
     isFullscreen: mainWindow.isFullScreen(),
     isFocused: mainWindow.isFocused(),
   });
+};
+
+const getDisplayWorkAreas = (): WindowRectangle[] => {
+  return screen.getAllDisplays().map((display) => display.workArea);
+};
+
+const getCurrentAppWindowState = () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+
+  const bounds = mainWindow.isFullScreen()
+    ? mainWindow.getNormalBounds()
+    : mainWindow.isMaximized()
+      ? mainWindow.getNormalBounds()
+      : mainWindow.getBounds();
+
+  return {
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    isMaximized: mainWindow.isMaximized(),
+  };
+};
+
+const persistAppWindowState = () => {
+  const state = getCurrentAppWindowState();
+  if (!state) return;
+  getStore().set(AppWindowStoreKey.State, state);
+};
+
+const schedulePersistAppWindowState = () => {
+  if (windowStateSaveTimer) {
+    clearTimeout(windowStateSaveTimer);
+  }
+
+  windowStateSaveTimer = setTimeout(() => {
+    windowStateSaveTimer = null;
+    persistAppWindowState();
+  }, WINDOW_STATE_SAVE_DEBOUNCE_MS);
 };
 
 const showSystemMenu = (position?: { x?: number; y?: number }) => {
@@ -5361,9 +5409,14 @@ if (!gotTheLock) {
       return;
     }
 
+    const initialWindowState = resolveInitialAppWindowState(
+      getStore().get(AppWindowStoreKey.State),
+      getDisplayWorkAreas(),
+    );
+    const { isMaximized: shouldRestoreMaximized, ...initialWindowBounds } = initialWindowState;
+
     mainWindow = new BrowserWindow({
-      width: 1200,
-      height: 800,
+      ...initialWindowBounds,
       title: APP_NAME,
       icon: getAppIconPath(),
       ...(isMac
@@ -5444,7 +5497,10 @@ if (!gotTheLock) {
     });
 
     // 设置窗口的最小尺寸
-    mainWindow.setMinimumSize(800, 600);
+    mainWindow.setMinimumSize(MIN_APP_WINDOW_WIDTH, MIN_APP_WINDOW_HEIGHT);
+    if (shouldRestoreMaximized) {
+      mainWindow.maximize();
+    }
 
     // 设置窗口加载超时
     const loadTimeout = setTimeout(() => {
@@ -5467,6 +5523,12 @@ if (!gotTheLock) {
 
     // 处理窗口关闭
     mainWindow.on('close', (e) => {
+      if (windowStateSaveTimer) {
+        clearTimeout(windowStateSaveTimer);
+        windowStateSaveTimer = null;
+      }
+      persistAppWindowState();
+
       // In development, close should actually quit so `npm run electron:dev`
       // restarts from a clean process. In production we keep tray behavior.
       if (mainWindow && !isQuitting && !isDev) {
@@ -5526,14 +5588,24 @@ if (!gotTheLock) {
 
     // 当窗口关闭时，清除引用
     mainWindow.on('closed', () => {
+      if (windowStateSaveTimer) {
+        clearTimeout(windowStateSaveTimer);
+        windowStateSaveTimer = null;
+      }
       mainWindow = null;
     });
 
     const forwardWindowState = () => emitWindowState();
-    mainWindow.on('maximize', forwardWindowState);
-    mainWindow.on('unmaximize', forwardWindowState);
-    mainWindow.on('enter-full-screen', forwardWindowState);
-    mainWindow.on('leave-full-screen', forwardWindowState);
+    const forwardAndPersistWindowState = () => {
+      emitWindowState();
+      schedulePersistAppWindowState();
+    };
+    mainWindow.on('resize', schedulePersistAppWindowState);
+    mainWindow.on('move', schedulePersistAppWindowState);
+    mainWindow.on('maximize', forwardAndPersistWindowState);
+    mainWindow.on('unmaximize', forwardAndPersistWindowState);
+    mainWindow.on('enter-full-screen', forwardAndPersistWindowState);
+    mainWindow.on('leave-full-screen', forwardAndPersistWindowState);
     mainWindow.on('focus', forwardWindowState);
     mainWindow.on('blur', forwardWindowState);
 
