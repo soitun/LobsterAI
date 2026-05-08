@@ -1389,7 +1389,7 @@ const AssistantMessageItem: React.FC<{
           {turnMetadata?.usage?.outputTokens != null && (
             <span>{`↓${formatTokenCount(turnMetadata.usage.outputTokens)}`}</span>
           )}
-          {turnMetadata?.usage?.cacheReadTokens != null && (
+          {turnMetadata?.usage?.cacheReadTokens != null && turnMetadata.usage.cacheReadTokens > 0 && (
             <span>{`R${formatTokenCount(turnMetadata.usage.cacheReadTokens)}`}</span>
           )}
           {turnMetadata?.contextPercent != null && (
