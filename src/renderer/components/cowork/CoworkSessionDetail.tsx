@@ -1177,7 +1177,7 @@ const ReEditButton: React.FC<{
         e.stopPropagation();
         onClick();
       }}
-      className={`p-1.5 rounded-md dark:hover:bg-claude-darkSurfaceHover hover:bg-claude-surfaceHover transition-all duration-200 ${
+      className={`p-1.5 rounded-md hover:bg-surface-raised transition-all duration-200 ${
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
       tabIndex={visible ? 0 : -1}
