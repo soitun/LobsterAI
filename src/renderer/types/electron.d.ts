@@ -54,6 +54,23 @@ interface CoworkSessionSummary {
   updatedAt: number;
 }
 
+type CoworkSessionStatus = 'idle' | 'running' | 'completed' | 'error';
+
+interface CoworkContextUsage {
+  sessionId: string;
+  sessionKey?: string;
+  usedTokens?: number;
+  contextTokens?: number;
+  percent?: number;
+  compactionCount?: number;
+  status: 'unknown' | 'normal' | 'warning' | 'danger' | 'compacting';
+  latestCompactionCheckpointId?: string;
+  latestCompactionReason?: string;
+  latestCompactionCreatedAt?: number;
+  model?: string;
+  updatedAt: number;
+}
+
 interface CoworkConfig {
   workingDirectory: string;
   systemPrompt: string;
@@ -461,6 +478,12 @@ interface IElectronAPI {
       hasMore?: boolean;
       error?: string;
     }>;
+    getContextUsage: (
+      sessionId: string,
+    ) => Promise<{ success: boolean; usage?: CoworkContextUsage | null; error?: string }>;
+    compactContext: (
+      sessionId: string,
+    ) => Promise<{ success: boolean; compacted?: boolean; reason?: string; usage?: CoworkContextUsage | null; error?: string }>;
     getSessionMessages: (options: {
       sessionId: string;
       limit?: number;
@@ -526,6 +549,15 @@ interface IElectronAPI {
     ) => () => void;
     onStreamMessageUpdate: (
       callback: (data: { sessionId: string; messageId: string; content: string; metadata?: Record<string, unknown> }) => void,
+    ) => () => void;
+    onStreamSessionStatus: (
+      callback: (data: { sessionId: string; status: CoworkSessionStatus }) => void,
+    ) => () => void;
+    onStreamContextUsage?: (
+      callback: (data: { sessionId: string; usage: CoworkContextUsage }) => void,
+    ) => () => void;
+    onStreamContextMaintenance?: (
+      callback: (data: { sessionId: string; active: boolean }) => void,
     ) => () => void;
     onStreamPermission: (
       callback: (data: { sessionId: string; request: CoworkPermissionRequest }) => void,

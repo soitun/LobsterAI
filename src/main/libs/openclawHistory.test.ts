@@ -6,6 +6,9 @@ import {
   extractGatewayMessageText,
   isHeartbeatAckText,
   isHeartbeatPromptText,
+  isPreCompactionMemoryFlushPromptText,
+  isSilentTokenPrefixText,
+  isSilentTokenText,
 } from './openclawHistory';
 
 describe('openclawHistory', () => {
@@ -74,6 +77,30 @@ describe('openclawHistory', () => {
     const entry = extractGatewayHistoryEntry({
       role: 'assistant',
       content: [{ type: 'text', text: 'HEARTBEAT_OK' }],
+    });
+    expect(entry).toBeNull();
+  });
+
+  test('filters pure silent token assistant messages', () => {
+    expect(
+      extractGatewayHistoryEntry({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'NO_REPLY' }],
+      })
+    ).toBeNull();
+    expect(
+      extractGatewayHistoryEntry({
+        role: 'assistant',
+        content: [{ type: 'text', text: '`no_reply`' }],
+      })
+    ).toBeNull();
+  });
+
+  test('filters pre-compaction memory flush user messages', () => {
+    const entry = extractGatewayHistoryEntry({
+      role: 'user',
+      content: `Pre-compaction memory flush. Store durable memories only in memory/2026-05-09.md (create memory/ if needed). Treat workspace bootstrap/reference files such as MEMORY.md as read-only during this flush. If nothing to store, reply with NO_REPLY.
+Current time: Saturday, May 9th, 2026 - 11:57 (Asia/Shanghai) / 2026-05-09 03:57 UTC`,
     });
     expect(entry).toBeNull();
   });
@@ -150,5 +177,17 @@ Do not infer or repeat old tasks from prior chats.
 If nothing needs attention, reply HEARTBEAT_OK.`)
     ).toBe(true);
     expect(isHeartbeatPromptText('Please read README.md and reply OK.')).toBe(false);
+  });
+
+  test('silent and memory flush detectors are narrow', () => {
+    expect(isSilentTokenText('NO_REPLY')).toBe(true);
+    expect(isSilentTokenPrefixText('NO_REP')).toBe(true);
+    expect(isSilentTokenPrefixText('NO_REPLY')).toBe(false);
+    expect(isSilentTokenPrefixText('NO_REPLY after saving memory')).toBe(false);
+    expect(isSilentTokenText('NO_REPLY after saving memory')).toBe(false);
+    expect(isPreCompactionMemoryFlushPromptText(`Pre-compaction memory flush.
+Store durable memories only in memory/2026-05-09.md.
+If nothing to store, reply with NO_REPLY.`)).toBe(true);
+    expect(isPreCompactionMemoryFlushPromptText('Please write a memory summary.')).toBe(false);
   });
 });

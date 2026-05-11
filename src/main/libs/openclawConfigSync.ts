@@ -564,6 +564,14 @@ type ProviderDescriptor = {
   }>;
 };
 
+// Temporary compaction test override. Remove after validating OpenClaw compaction UX.
+const TEMP_CONTEXT_WINDOW_FOR_COMPACTION_TEST = 60_000;
+
+const resolveContextWindowForModelSync = (
+  descriptor: ProviderDescriptor,
+): number | undefined => TEMP_CONTEXT_WINDOW_FOR_COMPACTION_TEST
+  ?? descriptor.modelDefaults?.contextWindow;
+
 const PROVIDER_REGISTRY: Record<string, ProviderDescriptor> = {
   [ProviderName.LobsteraiServer]: {
     providerId: OpenClawProviderId.LobsteraiServer,
@@ -778,6 +786,7 @@ export const buildProviderSelection = (options: {
   const reasoning = descriptor.resolveModelReasoning
     ? descriptor.resolveModelReasoning(options.modelId, !!options.codingPlanEnabled)
     : descriptor.modelDefaults?.reasoning;
+  const contextWindow = resolveContextWindowForModelSync(descriptor);
   const request = shouldUseEnvProxyForProviderBaseUrl(baseUrl)
     ? { proxy: { mode: 'env-proxy' as const } }
     : undefined;
@@ -806,8 +815,8 @@ export const buildProviderSelection = (options: {
           input: modelInput,
           ...(reasoning !== undefined ? { reasoning } : {}),
           ...(descriptor.modelDefaults?.cost ? { cost: descriptor.modelDefaults.cost } : {}),
-          ...(descriptor.modelDefaults?.contextWindow
-            ? { contextWindow: descriptor.modelDefaults.contextWindow }
+          ...(contextWindow
+            ? { contextWindow }
             : {}),
           ...(descriptor.modelDefaults?.maxTokens
             ? { maxTokens: descriptor.modelDefaults.maxTokens }

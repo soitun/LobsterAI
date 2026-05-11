@@ -526,6 +526,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     coworkToolInput: '工具参数',
     coworkToolResult: '执行结果',
     coworkToolRunning: '执行中',
+    coworkContextMaintenanceRunning: '正在整理上下文...',
     coworkToolNoErrorDetail: '执行失败（无详细错误输出）',
     coworkTodosTitle: 'Todos',
     coworkTodoItems: '项',
@@ -684,6 +685,17 @@ const translations: Record<LanguageType, Record<string, string>> = {
     folderDriveRootNotAllowed:
       '不支持使用磁盘根目录作为工作目录，请选择一个子文件夹（例如 D:\\Projects）。',
     coworkOpenFolder: '打开文件夹',
+    coworkSessionStillRunning: '当前任务仍在运行，请等待完成后继续。',
+    coworkContextUsageUnknown: '上下文使用量暂不可用',
+    coworkContextUsagePercent: '上下文：{percent}% 已用',
+    coworkContextUsageTokens: '已用 {used} tokens，共 {total}',
+    coworkContextUsageCompactions: '已压缩 {count} 次',
+    coworkContextCompactAction: '压缩上下文',
+    coworkContextCompactConfirm: '确定要压缩当前会话上下文吗？',
+    coworkContextCompacting: '正在压缩上下文...',
+    coworkContextAutoCompacted: '上下文已自动压缩，并继续执行当前任务。',
+    coworkContextManualCompacted: '上下文已压缩。',
+    coworkContextManualCompactNoop: '当前上下文无需压缩。',
 
     // Cowork 错误消息
     coworkErrorAuthInvalid: 'API 密钥无效或已过期，请在设置中检查并更新您的 API 密钥。',
@@ -2138,6 +2150,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     coworkToolInput: 'Tool Input',
     coworkToolResult: 'Result',
     coworkToolRunning: 'Running...',
+    coworkContextMaintenanceRunning: 'Organizing context...',
     coworkToolNoErrorDetail: 'Failed (no error details)',
     coworkTodosTitle: 'Todos',
     coworkTodoItems: 'items',
@@ -2306,6 +2319,17 @@ const translations: Record<LanguageType, Record<string, string>> = {
     folderDriveRootNotAllowed:
       'Drive root directories are not supported as working directories. Please select a subfolder (e.g. D:\\Projects).',
     coworkOpenFolder: 'Open folder',
+    coworkSessionStillRunning: 'The current task is still running. Please wait for it to finish.',
+    coworkContextUsageUnknown: 'Context usage is unavailable',
+    coworkContextUsagePercent: 'Context: {percent}% used',
+    coworkContextUsageTokens: 'Used {used} tokens, total {total}',
+    coworkContextUsageCompactions: 'Compacted {count} times',
+    coworkContextCompactAction: 'Compact context',
+    coworkContextCompactConfirm: 'Compact context for the current session?',
+    coworkContextCompacting: 'Compacting context...',
+    coworkContextAutoCompacted: 'Context was automatically compacted, and the task is continuing.',
+    coworkContextManualCompacted: 'Context compacted.',
+    coworkContextManualCompactNoop: 'No context compaction was needed.',
 
     // Cowork error messages
     coworkErrorAuthInvalid:

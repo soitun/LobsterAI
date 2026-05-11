@@ -122,6 +122,7 @@ interface CoworkPromptInputProps {
   showModelSelector?: boolean;
   onManageSkills?: () => void;
   sessionId?: string;
+  contextUsageControl?: React.ReactNode;
   /** When true, hides attachment/skill buttons but keeps the input box visible (disabled) */
   remoteManaged?: boolean;
 }
@@ -141,6 +142,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
       showModelSelector = false,
       onManageSkills,
       sessionId,
+      contextUsageControl,
       remoteManaged = false,
     } = props;
     const dispatch = useDispatch();
@@ -315,7 +317,13 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
     }
 
     const trimmedValue = value.trim();
-    if ((!trimmedValue && attachments.length === 0) || isStreaming || disabled || isPatchingModel) return;
+    if (isStreaming) {
+      window.dispatchEvent(new CustomEvent('app:showToast', {
+        detail: i18nService.t('coworkSessionStillRunning'),
+      }));
+      return;
+    }
+    if ((!trimmedValue && attachments.length === 0) || disabled || isPatchingModel) return;
     setShowFolderRequiredWarning(false);
 
     // Get active skills prompts and combine them
@@ -445,7 +453,12 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
         break;
     }
 
-    if (isSendCombo && !isStreaming && !disabled && !isPatchingModel) {
+    if (isSendCombo && isStreaming) {
+      event.preventDefault();
+      window.dispatchEvent(new CustomEvent('app:showToast', {
+        detail: i18nService.t('coworkSessionStillRunning'),
+      }));
+    } else if (isSendCombo && !disabled && !isPatchingModel) {
       event.preventDefault();
       handleSubmit();
     } else {
@@ -978,6 +991,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
                             if (currentAgent && agentModelIsInvalid) {
                               void agentService.updateAgent(currentAgent.id, { model: modelRef });
                             }
+                            void coworkService.refreshContextUsage(sessionId, { notifyCompaction: false });
                           } catch {
                             if (requestId === modelPatchRequestIdRef.current) {
                               dispatch(updateCurrentSessionModelOverride({
@@ -1027,7 +1041,8 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
                   </>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                {contextUsageControl}
                 {isStreaming ? (
                   <button
                     type="button"
@@ -1096,38 +1111,44 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
             )}
 
             {isStreaming ? (
-              <button
-                type="button"
-                onClick={handleStopClick}
-                className="flex-shrink-0 p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-all shadow-subtle hover:shadow-card active:scale-95"
-                aria-label="Stop"
-              >
-                <StopIcon className="h-4 w-4" />
-              </button>
+              <div className="flex flex-shrink-0 items-center gap-3">
+                {contextUsageControl}
+                <button
+                  type="button"
+                  onClick={handleStopClick}
+                  className="p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-all shadow-subtle hover:shadow-card active:scale-95"
+                  aria-label="Stop"
+                >
+                  <StopIcon className="h-4 w-4" />
+                </button>
+              </div>
             ) : (
-              <div className="relative flex-shrink-0">
-                <div className={`flex items-stretch rounded-lg shadow-subtle hover:shadow-card ${!canSubmit ? 'opacity-50' : ''}`}>
-                  <button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={!canSubmit}
-                    className="p-2 rounded-l-lg bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 disabled:cursor-not-allowed"
-                    aria-label="Send"
-                    title={currentSendShortcut !== 'Enter' ? getSendShortcutLabel(currentSendShortcut) : undefined}
-                  >
-                    <PaperAirplaneIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    ref={sendShortcutBtnRef}
-                    type="button"
-                    onClick={() => setShowSendShortcutMenu(!showSendShortcutMenu)}
-                    className="px-1 flex items-center rounded-r-lg bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 border-l border-white/20"
-                    aria-label="Change send shortcut"
-                  >
-                    <ChevronDownIcon className="h-3 w-3" />
-                  </button>
+              <div className="flex flex-shrink-0 items-center gap-3">
+                {contextUsageControl}
+                <div className="relative">
+                  <div className={`flex items-stretch rounded-lg shadow-subtle hover:shadow-card ${!canSubmit ? 'opacity-50' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={!canSubmit}
+                      className="p-2 rounded-l-lg bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 disabled:cursor-not-allowed"
+                      aria-label="Send"
+                      title={currentSendShortcut !== 'Enter' ? getSendShortcutLabel(currentSendShortcut) : undefined}
+                    >
+                      <PaperAirplaneIcon className="h-4 w-4" />
+                    </button>
+                    <button
+                      ref={sendShortcutBtnRef}
+                      type="button"
+                      onClick={() => setShowSendShortcutMenu(!showSendShortcutMenu)}
+                      className="px-1 flex items-center rounded-r-lg bg-primary hover:bg-primary-hover text-white transition-all active:scale-95 border-l border-white/20"
+                      aria-label="Change send shortcut"
+                    >
+                      <ChevronDownIcon className="h-3 w-3" />
+                    </button>
+                  </div>
+                  {showSendShortcutMenu && sendShortcutDropdown}
                 </div>
-                {showSendShortcutMenu && sendShortcutDropdown}
               </div>
             )}
           </>

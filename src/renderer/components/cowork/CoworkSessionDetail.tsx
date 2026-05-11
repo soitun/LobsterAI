@@ -51,6 +51,7 @@ import SidebarToggleIcon from '../icons/SidebarToggleIcon';
 import TrashIcon from '../icons/TrashIcon';
 import MarkdownContent from '../MarkdownContent';
 import WindowTitleBar from '../window/WindowTitleBar';
+import ContextUsageIndicator from './ContextUsageIndicator';
 import CoworkPromptInput, { type CoworkPromptInputRef } from './CoworkPromptInput';
 import DiffView, { extractDiffFromToolInput } from './DiffView';
 import LazyRenderTurn, { clearHeightCache } from './LazyRenderTurn';
@@ -734,12 +735,22 @@ export type ConversationTurn = {
   assistantItems: AssistantTurnItem[];
 };
 
+const SILENT_TOKEN_RE = /^[`*_~"'“”‘’()[\]{}<>.,!?;:，。！？；：\s-]{0,8}NO_REPLY[`*_~"'“”‘’()[\]{}<>.,!?;:，。！？；：\s-]{0,8}$/i;
+
+const isSilentAssistantMessage = (message: CoworkMessage): boolean => (
+  message.type === 'assistant' && SILENT_TOKEN_RE.test(message.content.trim())
+);
+
 export const buildDisplayItems = (messages: CoworkMessage[]): DisplayItem[] => {
   const items: DisplayItem[] = [];
   const groupsByToolUseId = new Map<string, ToolGroupItem>();
   let pendingAdjacentGroup: ToolGroupItem | null = null;
 
   for (const message of messages) {
+    if (isSilentAssistantMessage(message)) {
+      continue;
+    }
+
     if (message.type === 'tool_use') {
       const group: ToolGroupItem = { type: 'tool_group', toolUse: message };
       items.push(group);
@@ -845,6 +856,9 @@ export const buildConversationTurns = (items: DisplayItem[]): ConversationTurn[]
 };
 
 const isRenderableAssistantOrSystemMessage = (message: CoworkMessage): boolean => {
+  if (isSilentAssistantMessage(message)) {
+    return false;
+  }
   if (hasText(message.content) || hasText(message.metadata?.error)) {
     return true;
   }
@@ -1425,9 +1439,15 @@ const AssistantMessageItem: React.FC<{
 };
 
 // Streaming activity bar shown between messages and input
-const StreamingActivityBar: React.FC<{ messages: CoworkMessage[] }> = ({ messages }) => {
+const StreamingActivityBar: React.FC<{ messages: CoworkMessage[]; isContextMaintenance?: boolean }> = ({
+  messages,
+  isContextMaintenance = false,
+}) => {
   // Walk messages backwards to find the latest tool_use without a paired tool_result
   const getStatusText = (): string => {
+    if (isContextMaintenance) {
+      return i18nService.t('coworkContextMaintenanceRunning');
+    }
     const toolUseIds = new Set<string>();
     const toolResultIds = new Set<string>();
     for (const msg of messages) {
@@ -1713,6 +1733,15 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   const lastMessageContent = useSelector(selectLastMessageContent);
   const messagesLength = useSelector(selectCurrentMessagesLength);
   const skills = useSelector((state: RootState) => state.skill.skills);
+  const contextUsage = useSelector((state: RootState) =>
+    currentSession?.id ? state.cowork.contextUsageBySessionId[currentSession.id] : undefined
+  );
+  const isContextCompacting = useSelector((state: RootState) =>
+    currentSession?.id ? state.cowork.compactingSessionIds.includes(currentSession.id) : false
+  );
+  const isContextMaintenance = useSelector((state: RootState) =>
+    currentSession?.id ? state.cowork.contextMaintenanceSessionIds.includes(currentSession.id) : false
+  );
   const detailRootRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const promptInputRef = useRef<CoworkPromptInputRef>(null);
@@ -1768,6 +1797,13 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   useEffect(() => {
     setShouldAutoScroll(true);
   }, [currentSession?.id]);
+
+  const handleCompactContext = useCallback(() => {
+    if (!currentSession?.id || isContextCompacting) return;
+    const confirmed = window.confirm(i18nService.t('coworkContextCompactConfirm'));
+    if (!confirmed) return;
+    void coworkService.compactContext(currentSession.id);
+  }, [currentSession?.id, isContextCompacting]);
 
   // Focus rename input when entering rename mode
   useEffect(() => {
@@ -3203,7 +3239,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
       </div>
 
       {/* Streaming Activity Bar */}
-      {isStreaming && <StreamingActivityBar messages={currentSession.messages} />}
+      {isStreaming && <StreamingActivityBar messages={currentSession.messages} isContextMaintenance={isContextMaintenance} />}
 
       {/* Input Area */}
       <div className="p-4 shrink-0">
@@ -3220,6 +3256,14 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
             onManageSkills={remoteManaged ? undefined : onManageSkills}
             showModelSelector={true}
             sessionId={currentSession?.id}
+            contextUsageControl={(
+              <ContextUsageIndicator
+                usage={contextUsage}
+                compacting={isContextCompacting}
+                disabled={remoteManaged || !currentSession?.id}
+                onCompact={handleCompactContext}
+              />
+            )}
           />
         </div>
         <p className="text-center text-[11px] text-muted opacity-85 mt-2 mb-[-8px] select-none">

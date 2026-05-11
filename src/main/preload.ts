@@ -244,6 +244,10 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('cowork:session:list', options),
     getSessionMessages: (options: { sessionId: string; limit?: number; offset?: number }) =>
       ipcRenderer.invoke('cowork:session:getMessages', options),
+    getContextUsage: (sessionId: string) =>
+      ipcRenderer.invoke('cowork:session:contextUsage', sessionId),
+    compactContext: (sessionId: string) =>
+      ipcRenderer.invoke('cowork:session:compactContext', sessionId),
     exportResultImage: (options: { rect: { x: number; y: number; width: number; height: number }; defaultFileName?: string }) =>
       ipcRenderer.invoke('cowork:session:exportResultImage', options),
     captureImageChunk: (options: { rect: { x: number; y: number; width: number; height: number } }) =>
@@ -313,6 +317,21 @@ contextBridge.exposeInMainWorld('electron', {
       const handler = (_event: any, data: { sessionId: string; messageId: string; content: string; metadata?: Record<string, unknown> }) => callback(data);
       ipcRenderer.on('cowork:stream:messageUpdate', handler);
       return () => ipcRenderer.removeListener('cowork:stream:messageUpdate', handler);
+    },
+    onStreamSessionStatus: (callback: (data: { sessionId: string; status: string }) => void) => {
+      const handler = (_event: any, data: { sessionId: string; status: string }) => callback(data);
+      ipcRenderer.on('cowork:stream:sessionStatus', handler);
+      return () => ipcRenderer.removeListener('cowork:stream:sessionStatus', handler);
+    },
+    onStreamContextUsage: (callback: (data: { sessionId: string; usage: any }) => void) => {
+      const handler = (_event: any, data: { sessionId: string; usage: any }) => callback(data);
+      ipcRenderer.on('cowork:stream:contextUsage', handler);
+      return () => ipcRenderer.removeListener('cowork:stream:contextUsage', handler);
+    },
+    onStreamContextMaintenance: (callback: (data: { sessionId: string; active: boolean }) => void) => {
+      const handler = (_event: any, data: { sessionId: string; active: boolean }) => callback(data);
+      ipcRenderer.on('cowork:stream:contextMaintenance', handler);
+      return () => ipcRenderer.removeListener('cowork:stream:contextMaintenance', handler);
     },
     onStreamPermission: (callback: (data: { sessionId: string; request: any }) => void) => {
       const handler = (_event: any, data: { sessionId: string; request: any }) => callback(data);

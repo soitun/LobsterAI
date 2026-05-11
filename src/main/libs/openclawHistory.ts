@@ -13,11 +13,18 @@ export interface GatewayHistoryEntry {
 }
 
 const HEARTBEAT_ACK_RE = /^[`*_~"'“”‘’()[\]{}<>.,!?;:，。！？；：\s-]{0,8}HEARTBEAT_OK[`*_~"'“”‘’()[\]{}<>.,!?;:，。！？；：\s-]{0,8}$/i;
+const SILENT_TOKEN_RE = /^[`*_~"'“”‘’()[\]{}<>.,!?;:，。！？；：\s-]{0,8}NO_REPLY[`*_~"'“”‘’()[\]{}<>.,!?;:，。！？；：\s-]{0,8}$/i;
+const SILENT_TOKEN_PREFIX_RE = /^[`*_~"'“”‘’()[\]{}<>.,!?;:，。！？；：\s-]{0,8}(?:N|NO|NO_|NO_R|NO_RE|NO_REP|NO_REPL|NO_REPLY)$/i;
 const HEARTBEAT_PROMPT_MARKERS = [
   'read heartbeat.md if it exists',
   'when reading heartbeat.md',
   'reply heartbeat_ok',
   'do not infer or repeat old tasks from prior chats',
+] as const;
+const PRE_COMPACTION_MEMORY_FLUSH_MARKERS = [
+  'pre-compaction memory flush',
+  'store durable memories only in memory/',
+  'reply with no_reply',
 ] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -97,6 +104,13 @@ export const buildScheduledReminderSystemMessage = (text: string): string | null
 
 export const isHeartbeatAckText = (text: string): boolean => HEARTBEAT_ACK_RE.test(text.trim());
 
+export const isSilentTokenText = (text: string): boolean => SILENT_TOKEN_RE.test(text.trim());
+
+export const isSilentTokenPrefixText = (text: string): boolean => {
+  const trimmed = text.trim();
+  return trimmed.length > 0 && !isSilentTokenText(trimmed) && SILENT_TOKEN_PREFIX_RE.test(trimmed);
+};
+
 export const isHeartbeatPromptText = (text: string): boolean => {
   const normalized = text.trim().toLowerCase();
   if (!normalized) {
@@ -105,11 +119,19 @@ export const isHeartbeatPromptText = (text: string): boolean => {
   return HEARTBEAT_PROMPT_MARKERS.every((marker) => normalized.includes(marker));
 };
 
+export const isPreCompactionMemoryFlushPromptText = (text: string): boolean => {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return PRE_COMPACTION_MEMORY_FLUSH_MARKERS.every((marker) => normalized.includes(marker));
+};
+
 export const shouldSuppressHeartbeatText = (role: GatewayHistoryRole, text: string): boolean => {
-  if ((role === 'assistant' || role === 'system') && isHeartbeatAckText(text)) {
+  if ((role === 'assistant' || role === 'system') && (isHeartbeatAckText(text) || isSilentTokenText(text))) {
     return true;
   }
-  if (role === 'user' && isHeartbeatPromptText(text)) {
+  if (role === 'user' && (isHeartbeatPromptText(text) || isPreCompactionMemoryFlushPromptText(text))) {
     return true;
   }
   return false;
