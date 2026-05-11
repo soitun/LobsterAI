@@ -218,6 +218,11 @@ const AgentTreeNode: React.FC<AgentTreeNodeProps> = ({
     onCreateTask(agent);
   };
 
+  const handleAgentClick = (event: React.MouseEvent) => {
+    onToggleExpanded(agent.id);
+    handleCreateTask(event);
+  };
+
   const handleDeleteMenuClick = (event: React.MouseEvent) => {
     event.stopPropagation();
     if (isMainAgent) return;
@@ -236,7 +241,7 @@ const AgentTreeNode: React.FC<AgentTreeNodeProps> = ({
       <div className={`group sticky top-10 ${isMenuOpen ? 'z-50' : 'z-20'} -ml-[6px] h-7 w-[calc(100%+12px)] bg-surface-raised`}>
         <button
           type="button"
-          onClick={() => onToggleExpanded(agent.id)}
+          onClick={handleAgentClick}
           className="flex h-full w-full items-center gap-2 rounded-md py-0 pl-3.5 pr-12 text-left text-[14px] font-normal text-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
           role="treeitem"
           aria-level={1}

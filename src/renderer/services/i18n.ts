@@ -412,6 +412,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     coworkModelSettingsAction: '前往模型设置',
     modelGroupServer: '套餐模型',
     modelGroupUser: '自定义模型',
+    modelSupportsImageInputBadge: '可读图',
     modelSelectorNoModels: '请先在设置中配置模型',
     coworkApiConfigTitle: 'API 配置',
     coworkApiConfigHint:
@@ -648,8 +649,10 @@ const translations: Record<LanguageType, Record<string, string>> = {
     coworkQuestionWizardOtherPlaceholder: '请输入自定义答案...',
     coworkQuestionWizardSelectAtLeastOne: '请至少选择一个选项',
     coworkQuestionWizardAnswerRequired: '请选择或输入答案',
-    coworkWelcome: '开始协作',
+    coworkWelcome: 'LobsterAI',
     coworkDescription: '7×24 小时帮你干活的全场景个人助理 Agent',
+    coworkCurrentAgent: '当前 Agent',
+    coworkSelectAgent: '选择 Agent',
 
     // Multi-Agent 管理
     createAgent: '创建 Agent',
@@ -2230,6 +2233,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     coworkModelSettingsAction: 'Go to Model Settings',
     modelGroupServer: 'Plan Models',
     modelGroupUser: 'Custom Models',
+    modelSupportsImageInputBadge: 'Reads images',
     modelSelectorNoModels: 'Please configure models in settings first',
     coworkApiConfigTitle: 'API Configuration',
     coworkApiConfigHint:
@@ -2479,8 +2483,10 @@ const translations: Record<LanguageType, Record<string, string>> = {
     coworkQuestionWizardOtherPlaceholder: 'Enter custom answer...',
     coworkQuestionWizardSelectAtLeastOne: 'Please select at least one option',
     coworkQuestionWizardAnswerRequired: 'Please select or enter an answer',
-    coworkWelcome: 'Start Collaborating',
+    coworkWelcome: 'LobsterAI',
     coworkDescription: 'A 24/7 personal assistant agent that gets work done for you',
+    coworkCurrentAgent: 'Current Agent',
+    coworkSelectAgent: 'Select Agent',
 
     // Multi-Agent management
     createAgent: 'Create Agent',
