@@ -45,6 +45,9 @@ const ContextUsageIndicator: React.FC<ContextUsageIndicatorProps> = ({
   onCompact,
 }) => {
   const percent = typeof usage?.percent === 'number' ? usage.percent : undefined;
+  if (!compacting && percent === undefined) {
+    return null;
+  }
   const offset = percent === undefined
     ? CIRCUMFERENCE
     : CIRCUMFERENCE * (1 - Math.min(Math.max(percent, 0), 100) / 100);

@@ -49,6 +49,9 @@ const classifyError = (error: string): string => {
   return key ? i18nService.t(key) : error;
 };
 
+const CONTEXT_USAGE_REFRESH_DELAY_MS = 800;
+const FINAL_CONTEXT_USAGE_REFRESH_DELAYS_MS = [800, 2500, 6000, 12000] as const;
+
 class CoworkService {
   private streamListenerCleanups: Array<() => void> = [];
   private initialized = false;
@@ -177,7 +180,7 @@ class CoworkService {
     // Complete listener
     const completeCleanup = cowork.onStreamComplete(({ sessionId }) => {
       store.dispatch(updateSessionStatus({ sessionId, status: 'completed' }));
-      this.scheduleContextUsageRefresh(sessionId, true);
+      this.scheduleFinalContextUsageRefresh(sessionId, true);
     });
     this.streamListenerCleanups.push(completeCleanup);
 
@@ -235,16 +238,27 @@ class CoworkService {
     return /session .* is still running/i.test(error);
   }
 
-  private scheduleContextUsageRefresh(sessionId: string, notifyCompaction: boolean): void {
-    const existing = this.contextUsageRefreshTimers.get(sessionId);
+  private scheduleContextUsageRefresh(
+    sessionId: string,
+    notifyCompaction: boolean,
+    delayMs = CONTEXT_USAGE_REFRESH_DELAY_MS,
+  ): void {
+    const timerKey = `${sessionId}:${delayMs}`;
+    const existing = this.contextUsageRefreshTimers.get(timerKey);
     if (existing) {
       clearTimeout(existing);
     }
     const timer = setTimeout(() => {
-      this.contextUsageRefreshTimers.delete(sessionId);
+      this.contextUsageRefreshTimers.delete(timerKey);
       void this.refreshContextUsage(sessionId, { notifyCompaction });
-    }, 800);
-    this.contextUsageRefreshTimers.set(sessionId, timer);
+    }, delayMs);
+    this.contextUsageRefreshTimers.set(timerKey, timer);
+  }
+
+  private scheduleFinalContextUsageRefresh(sessionId: string, notifyCompaction: boolean): void {
+    for (const delayMs of FINAL_CONTEXT_USAGE_REFRESH_DELAYS_MS) {
+      this.scheduleContextUsageRefresh(sessionId, notifyCompaction, delayMs);
+    }
   }
 
   private handleContextUsageUpdate(usage: CoworkContextUsage, notifyCompaction: boolean): void {
