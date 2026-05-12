@@ -74,6 +74,33 @@ test('channel sync still recognizes real channel session keys', () => {
   expect(sync.isChannelSessionKey('agent:main:main')).toBe(true);
 });
 
+test('channel sync treats stale agent ids as non-current after platform binding changes', () => {
+  const sync = new OpenClawChannelSessionSync({
+    coworkStore: {
+      getSession: () => null,
+      createSession: () => {
+        throw new Error('createSession should not be called in this test');
+      },
+    },
+    imStore: {
+      getIMSettings: () => ({
+        skillsEnabled: true,
+        platformAgentBindings: {
+          weixin: 'agent-2',
+        },
+      }),
+      getSessionMapping: () => null,
+      updateSessionLastActive: () => {},
+      deleteSessionMapping: () => {},
+      createSessionMapping: () => {},
+    },
+    getDefaultCwd: () => '/tmp',
+  });
+
+  expect(sync.isCurrentBindingKey('agent:main:openclaw-weixin:bot-1:direct:user-1')).toBe(false);
+  expect(sync.isCurrentBindingKey('agent:agent-2:openclaw-weixin:bot-1:direct:user-1')).toBe(true);
+});
+
 test('channel sync stores the real OpenClaw session key when creating a mapping', () => {
   const createSessionMapping = vi.fn();
   const getDefaultCwd = vi.fn((agentId?: string) => `/tmp/${agentId || 'fallback'}`);

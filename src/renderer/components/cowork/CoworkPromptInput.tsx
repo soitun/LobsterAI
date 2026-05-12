@@ -1094,14 +1094,9 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
       }}
     >
       <ActiveSkillBadge />
-      {!value.trim() && (
-        <span className="min-w-[120px] select-none text-[14px] font-normal leading-[22px] text-muted">
-          {placeholder}
-        </span>
-      )}
     </div>
   ) : null;
-  const textareaPlaceholder = hasActiveSkills ? '' : placeholder;
+  const textareaPlaceholder = placeholder;
 
   const readOnlyContextRow = isLarge && showReadOnlyContext && !useHomeContextLayout ? (
     <div className="mt-2 grid min-h-7 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4">

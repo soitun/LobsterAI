@@ -80,6 +80,7 @@ const mapExecutionModeToSandboxMode = (
  */
 export const OPENCLAW_AGENT_TIMEOUT_SECONDS = 3600;
 const DINGTALK_OPENCLAW_CHANNEL = 'dingtalk-connector';
+export const OPENCLAW_BINDING_ANY_ACCOUNT_ID = '*';
 
 function deriveNimAccountId(instance: Pick<NimInstanceConfig, 'nimToken' | 'appKey' | 'account'>): string | null {
   const nimToken = instance.nimToken?.trim();
@@ -2704,7 +2705,10 @@ export class OpenClawConfigSync {
         if (platformAgentId && platformAgentId !== 'main') {
           const targetAgent = agents.find(a => a.id === platformAgentId && a.enabled);
           if (targetAgent && instances.some(i => i.enabled)) {
-            bindings.push({ agentId: platformAgentId, match: { channel } });
+            bindings.push({
+              agentId: platformAgentId,
+              match: { channel, accountId: OPENCLAW_BINDING_ANY_ACCOUNT_ID },
+            });
           }
         }
       } catch {
@@ -2732,7 +2736,10 @@ export class OpenClawConfigSync {
       try {
         const cfg = getter();
         if (cfg?.enabled) {
-          bindings.push({ agentId, match: { channel } });
+          bindings.push({
+            agentId,
+            match: { channel, accountId: OPENCLAW_BINDING_ANY_ACCOUNT_ID },
+          });
         }
       } catch {
         // Skip channels that fail to load config

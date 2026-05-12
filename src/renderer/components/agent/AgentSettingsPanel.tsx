@@ -11,7 +11,7 @@ import { imService } from '../../services/im';
 import { RootState } from '../../store';
 import type { Model } from '../../store/slices/modelSlice';
 import type { Agent } from '../../types/agent';
-import type { DingTalkInstanceConfig, DingTalkInstanceStatus, DiscordInstanceConfig, DiscordInstanceStatus, FeishuInstanceConfig, FeishuInstanceStatus, IMGatewayConfig, IMGatewayStatus, NimInstanceConfig, NimInstanceStatus, PopoInstanceConfig, PopoInstanceStatus, QQInstanceConfig, QQInstanceStatus, TelegramInstanceConfig, TelegramInstanceStatus, WecomInstanceConfig, WecomInstanceStatus } from '../../types/im';
+import type { DingTalkInstanceConfig, DiscordInstanceConfig, FeishuInstanceConfig, IMGatewayConfig, NimInstanceConfig, PopoInstanceConfig, QQInstanceConfig, TelegramInstanceConfig, WecomInstanceConfig } from '../../types/im';
 import { getAgentDisplayName, getAgentDisplayNameById, isDefaultAgentId } from '../../utils/agentDisplay';
 import { resolveOpenClawModelRef, toOpenClawModelRef } from '../../utils/openclawModelRef';
 import { getVisibleIMPlatforms } from '../../utils/regionFilter';
@@ -25,7 +25,6 @@ import { AgentConfirmDialogVariant, AgentDetailTab } from './constants';
 
 type MultiInstancePlatform = 'dingtalk' | 'feishu' | 'qq' | 'wecom' | 'nim' | 'telegram' | 'discord' | 'popo';
 type MultiInstanceConfig = DingTalkInstanceConfig | FeishuInstanceConfig | QQInstanceConfig | WecomInstanceConfig | NimInstanceConfig | TelegramInstanceConfig | DiscordInstanceConfig | PopoInstanceConfig;
-type MultiInstanceStatus = DingTalkInstanceStatus | FeishuInstanceStatus | QQInstanceStatus | WecomInstanceStatus | NimInstanceStatus | TelegramInstanceStatus | DiscordInstanceStatus | PopoInstanceStatus;
 
 const MULTI_INSTANCE_PLATFORMS: MultiInstancePlatform[] = ['dingtalk', 'feishu', 'qq', 'wecom', 'nim', 'telegram', 'discord', 'popo'];
 
@@ -39,7 +38,6 @@ interface AgentSettingsPanelProps {
 
 const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClose }) => {
   const agents = useSelector((state: RootState) => state.agent.agents);
-  const imStatus = useSelector((state: RootState) => state.im.status);
   const availableModels = useSelector((state: RootState) => state.model.availableModels);
   const [, setAgent] = useState<Agent | null>(null);
   const [name, setName] = useState('');
@@ -57,7 +55,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<AgentDetailTab>(AgentDetailTab.Prompt);
 
-  // IM binding state — keys are 'telegram' (single) or 'dingtalk:<instanceId>' (multi)
+  // IM binding state — keys are platform names or `platform:<instanceId>` for multi-instance platforms.
   const [imConfig, setImConfig] = useState<IMGatewayConfig | null>(null);
   const [boundKeys, setBoundKeys] = useState<Set<string>>(new Set());
   const [initialBoundKeys, setInitialBoundKeys] = useState<Set<string>>(new Set());
@@ -140,7 +138,6 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
         setInitialBoundKeys(new Set(bound));
       }
     });
-    void imService.loadStatus();
     return () => {
       cancelled = true;
     };
@@ -222,8 +219,13 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
             delete currentBindings[key];
           }
         }
-        // The main agent is the implicit default, so explicit main bindings are unnecessary.
-        if (!isMainAgent) {
+        if (isMainAgent) {
+          // The main agent is the implicit default. Claiming an IM channel means
+          // removing any explicit binding held by another agent.
+          for (const key of boundKeys) {
+            delete currentBindings[key];
+          }
+        } else {
           for (const key of boundKeys) {
             currentBindings[key] = agentId;
           }
@@ -259,26 +261,19 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
     setBoundKeys(next);
   };
 
-  /** Check if a multi-instance platform has any enabled+connected instances */
-  const getConnectedInstances = (platform: MultiInstancePlatform) => {
+  /** Check if a multi-instance platform has any enabled instances. */
+  const getEnabledInstances = (platform: MultiInstancePlatform) => {
     if (!imConfig) return [];
     const cfg = imConfig[platform];
     const instances = cfg?.instances;
     if (!Array.isArray(instances)) return [];
-    const statusInstances = (imStatus as IMGatewayStatus | undefined)?.[platform]?.instances;
-    return instances.filter((inst: MultiInstanceConfig) => {
-      if (!inst.enabled) return false;
-      const instStatus = Array.isArray(statusInstances)
-        ? statusInstances.find((s: MultiInstanceStatus) => s.instanceId === inst.instanceId)
-        : null;
-      return instStatus?.connected === true;
-    });
+    return instances.filter((inst: MultiInstanceConfig) => inst.enabled);
   };
 
   const isPlatformConfigured = (platform: Platform): boolean => {
     if (!imConfig) return false;
     if (isMultiInstancePlatform(platform)) {
-      return getConnectedInstances(platform).length > 0;
+      return getEnabledInstances(platform).length > 0;
     }
     // email is a multi-instance platform
     if (platform === 'email') {
@@ -344,12 +339,12 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
   );
 
   const renderMultiInstancePlatform = (platform: MultiInstancePlatform) => {
-    const connectedInstances = getConnectedInstances(platform);
+    const enabledInstances = getEnabledInstances(platform);
     const logo = PlatformRegistry.logo(platform);
     const bindings = imConfig?.settings?.platformAgentBindings || {};
 
-    if (connectedInstances.length === 0) {
-      // No connected instances — show disabled row like single-instance unconfigured
+    if (enabledInstances.length === 0) {
+      // No enabled instances — show disabled row like single-instance unconfigured
       return (
         <div
           key={platform}
@@ -387,20 +382,21 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
           </span>
         </div>
         {/* Instance list */}
-        {connectedInstances.map((inst: MultiInstanceConfig, idx: number) => {
+        {enabledInstances.map((inst: MultiInstanceConfig, idx: number) => {
           const bindingKey = `${platform}:${inst.instanceId}`;
           const otherAgentId = bindings[bindingKey];
-          const boundToOther = Boolean(otherAgentId && otherAgentId !== agentId);
-          const canToggle = !isMainAgent && !boundToOther;
-          const isBound = isMainAgent ? !boundToOther : boundKeys.has(bindingKey);
+          const claimingForMain = isMainAgent && boundKeys.has(bindingKey);
+          const boundToOther = Boolean(otherAgentId && otherAgentId !== agentId && !claimingForMain && !boundKeys.has(bindingKey));
+          const canToggle = !isMainAgent || boundToOther || claimingForMain;
+          const isBound = isMainAgent ? claimingForMain || !boundToOther : boundKeys.has(bindingKey);
           const otherAgentName = boundToOther ? getAgentName(otherAgentId ?? '') : null;
 
           return (
             <div
               key={inst.instanceId}
               className={`flex items-center justify-between px-3 py-2 pl-14 transition-colors ${
-                idx < connectedInstances.length - 1 ? 'border-b border-border-subtle' : ''
-              } ${canToggle ? 'cursor-pointer hover:bg-surface-raised' : ''} ${boundToOther ? 'opacity-55' : ''}`}
+                idx < enabledInstances.length - 1 ? 'border-b border-border-subtle' : ''
+              } ${canToggle ? 'cursor-pointer hover:bg-surface-raised' : ''}`}
               onClick={() => canToggle && handleToggleIMBinding(bindingKey)}
             >
               <div className="flex items-center gap-2">
@@ -414,11 +410,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
                   </span>
                 )}
               </div>
-              {boundToOther ? (
-                <div className="w-9 h-5" />
-              ) : (
-                renderToggle(isBound)
-              )}
+              {renderToggle(isBound)}
             </div>
           );
         })}
@@ -431,9 +423,10 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
     const configured = isPlatformConfigured(platform);
     const bindings = imConfig?.settings?.platformAgentBindings || {};
     const otherAgentId = bindings[platform];
-    const boundToOther = Boolean(configured && otherAgentId && otherAgentId !== agentId);
-    const canToggle = configured && !boundToOther && !isMainAgent;
-    const isBound = isMainAgent ? configured && !boundToOther : boundKeys.has(platform);
+    const claimingForMain = isMainAgent && boundKeys.has(platform);
+    const boundToOther = Boolean(configured && otherAgentId && otherAgentId !== agentId && !claimingForMain && !boundKeys.has(platform));
+    const canToggle = configured && (!isMainAgent || boundToOther || claimingForMain);
+    const isBound = isMainAgent ? configured && (claimingForMain || !boundToOther) : boundKeys.has(platform);
     const otherAgentName = boundToOther ? getAgentName(otherAgentId ?? '') : null;
 
     return (
@@ -442,9 +435,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
         className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${
           !configured
             ? 'opacity-50'
-            : boundToOther
-              ? 'opacity-55'
-              : canToggle
+            : canToggle
                 ? 'hover:bg-surface-raised cursor-pointer'
                 : ''
         }`}
@@ -472,7 +463,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
         </div>
         <div className="flex items-center gap-2">
           {configured ? (
-            boundToOther ? <div className="w-9 h-5" /> : renderToggle(isBound)
+            renderToggle(isBound)
           ) : (
             <span className="text-xs text-secondary/50">
               {i18nService.t('agentIMNotConfigured') || 'Not configured'}

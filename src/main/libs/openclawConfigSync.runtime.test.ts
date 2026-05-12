@@ -597,6 +597,140 @@ describe('OpenClawConfigSync runtime config output', () => {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     expect(config.channels['dingtalk-connector']).not.toHaveProperty('_agentBinding');
     expect(config.channels).not.toHaveProperty('dingtalk');
+    expect(config.bindings).toEqual([
+      {
+        agentId: 'worker-agent',
+        match: {
+          channel: 'dingtalk-connector',
+          accountId: 'b8a32c47',
+        },
+      },
+    ]);
+  });
+
+  test('writes platform-level agent bindings with account wildcard and keeps instance bindings exact', async () => {
+    const {
+      OpenClawConfigSync,
+      OPENCLAW_BINDING_ANY_ACCOUNT_ID,
+    } = await import('./openclawConfigSync');
+
+    const dingTalkInstance = {
+      enabled: true,
+      clientId: 'ding-client-id',
+      clientSecret: 'ding-secret',
+      dmPolicy: 'open',
+      allowFrom: ['*'],
+      groupPolicy: 'open',
+      sessionTimeout: 0,
+      separateSessionByConversation: false,
+      groupSessionScope: 'group',
+      sharedMemoryAcrossConversations: false,
+      gatewayBaseUrl: '',
+      debug: false,
+      instanceId: 'b8a32c47-c852-4ad2-bbfa-631797fc56ea',
+      instanceName: 'DingTalk Bot 1',
+    };
+
+    const sync = new OpenClawConfigSync({
+      engineManager: {
+        getConfigPath: () => configPath,
+        getGatewayToken: () => 'gateway-token',
+        getStateDir: () => stateDir,
+        getBaseDir: () => tmpDir,
+      } as never,
+      getCoworkConfig: () => ({
+        workingDirectory: tmpDir,
+        systemPrompt: '',
+        executionMode: 'local',
+        agentEngine: 'openclaw',
+        memoryEnabled: false,
+        memoryImplicitUpdateEnabled: false,
+        memoryLlmJudgeEnabled: false,
+        memoryGuardLevel: 'balanced',
+        memoryUserMemoriesMaxItems: 100,
+        skipMissedJobs: false,
+      }),
+      isEnterprise: () => false,
+      getTelegramOpenClawConfig: () => null,
+      getDiscordOpenClawConfig: () => null,
+      getDingTalkInstances: () => [dingTalkInstance],
+      getFeishuInstances: () => [],
+      getQQInstances: () => [],
+      getWecomConfig: () => null,
+      getWecomInstances: () => [],
+      getPopoInstances: () => [],
+      getNimConfig: () => null,
+      getNeteaseBeeChanConfig: () => null,
+      getWeixinConfig: () => ({
+        enabled: true,
+        accountId: '97a130e3b62f@im.bot',
+        dmPolicy: 'open',
+        allowFrom: [],
+        debug: false,
+      }),
+      getIMSettings: () => ({
+        platformAgentBindings: {
+          'dingtalk:b8a32c47-c852-4ad2-bbfa-631797fc56ea': 'instance-agent',
+          dingtalk: 'platform-agent',
+          weixin: 'weixin-agent',
+        },
+      }),
+      getSkillsList: () => [],
+      getAgents: () => [
+        {
+          id: 'instance-agent',
+          enabled: true,
+          name: 'Instance Agent',
+          prompt: '',
+          model: 'openai/gpt-test',
+          source: 'user',
+        },
+        {
+          id: 'platform-agent',
+          enabled: true,
+          name: 'Platform Agent',
+          prompt: '',
+          model: 'openai/gpt-test',
+          source: 'user',
+        },
+        {
+          id: 'weixin-agent',
+          enabled: true,
+          name: 'Weixin Agent',
+          prompt: '',
+          model: 'openai/gpt-test',
+          source: 'user',
+        },
+      ],
+    } as never);
+
+    const result = sync.sync('platform-binding-wildcard');
+    expect(result.ok).toBe(true);
+
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    expect(config.bindings).toEqual([
+      {
+        agentId: 'instance-agent',
+        match: {
+          channel: 'dingtalk-connector',
+          accountId: 'b8a32c47',
+        },
+      },
+      {
+        agentId: 'platform-agent',
+        match: {
+          channel: 'dingtalk-connector',
+          accountId: OPENCLAW_BINDING_ANY_ACCOUNT_ID,
+        },
+      },
+      {
+        agentId: 'weixin-agent',
+        match: {
+          channel: 'openclaw-weixin',
+          accountId: OPENCLAW_BINDING_ANY_ACCOUNT_ID,
+        },
+      },
+    ]);
   });
 
   test('prefers external lark for feishu without stale feishu entry and keeps bundled qqbot entry', async () => {
