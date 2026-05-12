@@ -30,7 +30,39 @@ const BROWSER_OPENABLE_TYPES = new Set<ArtifactType>(['html', 'svg', 'mermaid'])
 
 const SYSTEM_OPENABLE_TYPES = new Set<ArtifactType>(['document']);
 
-const NON_CODE_TYPES = new Set<ArtifactType>(['document', 'image']);
+const NON_CODE_TYPES = new Set<ArtifactType>(['document', 'image', 'text']);
+
+const COPYABLE_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg']);
+
+function isCopyableArtifact(artifact: Artifact): boolean {
+  if (artifact.type === 'document') return false;
+  if (artifact.type === 'image') {
+    const filename = artifact.fileName || artifact.filePath || '';
+    const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase();
+    return COPYABLE_IMAGE_EXTENSIONS.has(ext);
+  }
+  return true;
+}
+
+function dataUrlToPngBlob(dataUrl: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Failed to get canvas context')); return; }
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob);
+        else reject(new Error('Failed to convert image to blob'));
+      }, 'image/png');
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = dataUrl;
+  });
+}
 
 function buildBrowserHtml(artifact: Artifact): string | null {
   switch (artifact.type) {
@@ -163,10 +195,22 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
   }, [dispatch]);
 
   const handleCopy = useCallback(async () => {
-    if (selectedArtifact) {
+    if (!selectedArtifact) return;
+    if (selectedArtifact.type === 'image') {
+      if (selectedArtifact.filePath) {
+        const result = await window.electron?.clipboard?.writeImageFromFile(selectedArtifact.filePath);
+        if (!result?.success) {
+          window.dispatchEvent(new CustomEvent('app:showToast', { detail: result?.error || t('copyFailed') }));
+          return;
+        }
+      } else if (selectedArtifact.content) {
+        const blob = await dataUrlToPngBlob(selectedArtifact.content);
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      }
+    } else {
       await navigator.clipboard.writeText(selectedArtifact.content);
-      window.dispatchEvent(new CustomEvent('app:showToast', { detail: t('messageCopied') }));
     }
+    window.dispatchEvent(new CustomEvent('app:showToast', { detail: t('messageCopied') }));
   }, [selectedArtifact]);
 
   const handleRevealInFolder = useCallback(() => {
@@ -187,10 +231,12 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
       return;
     }
 
-    // Has file on disk: open directly
+    // Has file on disk: open directly via native path
+    // NOTE: shell.openExternal with file:// URLs fails on Windows when path contains
+    // non-ASCII characters (e.g. Chinese) — ERROR_FILE_NOT_FOUND (0x2).
+    // Use shell.openPath which handles native Unicode paths correctly.
     if (selectedArtifact.filePath) {
-      const fileUrl = `file://${selectedArtifact.filePath}`;
-      window.electron?.shell?.openExternal(fileUrl);
+      window.electron?.shell?.openPath(selectedArtifact.filePath);
       return;
     }
 
@@ -293,7 +339,7 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
                   <RefreshIcon />
                 </button>
               )}
-              {selectedArtifact.type !== 'document' && (
+              {isCopyableArtifact(selectedArtifact) && (
                 <button
                   onClick={handleCopy}
                   className="p-1 rounded text-secondary hover:text-foreground hover:bg-surface transition-colors"
