@@ -2957,7 +2957,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
       {isStreaming && <StreamingActivityBar messages={currentSession.messages} />}
 
       {/* Input Area */}
-      <div className={`py-4 shrink-0 ${COWORK_DETAIL_GUTTER_CLASS}`}>
+      <div className={`pt-0 pb-4 shrink-0 ${COWORK_DETAIL_GUTTER_CLASS}`}>
         <div className={COWORK_DETAIL_CONTENT_CLASS}>
           <CoworkPromptInput
             ref={promptInputRef}
