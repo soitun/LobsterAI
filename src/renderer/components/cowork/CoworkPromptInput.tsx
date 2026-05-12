@@ -3,7 +3,6 @@ import { ArrowUpIcon, FolderIcon, StopIcon } from '@heroicons/react/24/solid';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { triggerSystemDictation } from '../../hooks/useSpeechToText';
 import { agentService } from '../../services/agent';
 import { configService } from '../../services/config';
 import { coworkService } from '../../services/cowork';
@@ -28,7 +27,6 @@ import { toOpenClawModelRef } from '../../utils/openclawModelRef';
 import { getCompactFolderName } from '../../utils/path';
 import AgentAvatarIcon from '../agent/AgentAvatarIcon';
 import DefaultAgentIcon from '../icons/DefaultAgentIcon';
-import MicrophoneIcon from '../icons/MicrophoneIcon';
 import PaperClipIcon from '../icons/PaperClipIcon';
 import XMarkIcon from '../icons/XMarkIcon';
 import ModelSelector from '../ModelSelector';
@@ -212,20 +210,6 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
     const [showAgentMenu, setShowAgentMenu] = useState(false);
     const [isReadOnlyContextCompact, setIsReadOnlyContextCompact] = useState(false);
 
-    const handleVoiceInput = useCallback(async () => {
-      textareaRef.current?.focus();
-      const result = await triggerSystemDictation();
-      if (!result.success && result.error === 'permission_denied') {
-        window.dispatchEvent(new CustomEvent('app:showToast', {
-          detail: i18nService.t('voiceInputPermissionDenied'),
-        }));
-      } else if (!result.success) {
-        window.dispatchEvent(new CustomEvent('app:showToast', {
-          detail: i18nService.t('voiceInputFailed'),
-        }));
-      }
-    }, []);
-
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const folderButtonRef = useRef<HTMLButtonElement>(null);
     const agentButtonRef = useRef<HTMLButtonElement>(null);
@@ -287,7 +271,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
 
   const isLarge = size === 'large';
   const useHomeContextLayout = isLarge && showAgentSelector;
-  const useCompactSendButton = isLarge && showReadOnlyContext && !useHomeContextLayout;
+  const useCompactSendButton = isLarge && (useHomeContextLayout || showReadOnlyContext);
   const minHeight = isLarge
     ? useHomeContextLayout
       ? hasActiveSkills ? 36 : 52
@@ -1053,16 +1037,6 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
       >
         <PaperClipIcon className="h-4 w-4" />
       </button>
-      <button
-        type="button"
-        onClick={handleVoiceInput}
-        className="flex h-7 w-7 items-center justify-center rounded-lg text-secondary hover:bg-surface-raised hover:text-foreground transition-colors"
-        title={i18nService.t('voiceInput')}
-        aria-label={i18nService.t('voiceInput')}
-        disabled={disabled || isStreaming}
-      >
-        <MicrophoneIcon className="h-4 w-4" />
-      </button>
       <SkillsButton
         onSelectSkill={handleSelectSkill}
         onManageSkills={handleManageSkills}
@@ -1402,16 +1376,6 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
                   disabled={disabled || isStreaming || isAddingFile}
                 >
                   <PaperClipIcon className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleVoiceInput}
-                  className="flex-shrink-0 p-1.5 rounded-lg text-secondary hover:bg-surface-raised hover:text-foreground transition-colors"
-                  title={i18nService.t('voiceInput')}
-                  aria-label={i18nService.t('voiceInput')}
-                  disabled={disabled || isStreaming}
-                >
-                  <MicrophoneIcon className="h-4 w-4" />
                 </button>
               </div>
             )}
