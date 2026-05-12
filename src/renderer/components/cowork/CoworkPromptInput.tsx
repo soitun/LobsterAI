@@ -212,9 +212,18 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
     const [showAgentMenu, setShowAgentMenu] = useState(false);
     const [isReadOnlyContextCompact, setIsReadOnlyContextCompact] = useState(false);
 
-    const handleVoiceInput = useCallback(() => {
+    const handleVoiceInput = useCallback(async () => {
       textareaRef.current?.focus();
-      triggerSystemDictation();
+      const result = await triggerSystemDictation();
+      if (!result.success && result.error === 'permission_denied') {
+        window.dispatchEvent(new CustomEvent('app:showToast', {
+          detail: i18nService.t('voiceInputPermissionDenied'),
+        }));
+      } else if (!result.success) {
+        window.dispatchEvent(new CustomEvent('app:showToast', {
+          detail: i18nService.t('voiceInputFailed'),
+        }));
+      }
     }, []);
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
