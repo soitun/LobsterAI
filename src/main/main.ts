@@ -8,7 +8,7 @@ import type { OpenClawSessionPatch } from '../common/openclawSession';
 import { buildSessionTitleFromInput } from '../common/sessionTitle';
 import { buildScheduledTaskEnginePrompt } from '../scheduledTask/enginePrompt';
 import { migrateScheduledTaskRunsToOpenclaw, migrateScheduledTasksToOpenclaw } from '../scheduledTask/migrate';
-import { AgentIpcChannel } from '../shared/agent/constants';
+import { AgentId, AgentIpcChannel } from '../shared/agent/constants';
 import { AppUpdateIpc } from '../shared/appUpdate/constants';
 import { COWORK_MESSAGE_PAGE_SIZE, COWORK_SESSION_PAGE_SIZE } from '../shared/cowork/constants';
 import { PlatformRegistry } from '../shared/platform';
@@ -3256,6 +3256,13 @@ if (!gotTheLock) {
 
   ipcMain.handle(AgentIpcChannel.Delete, async (_event, id: string) => {
     try {
+      const agentExists = id !== AgentId.Main && getAgentManager().getAgent(id) !== null;
+      const deletedSessionIds = agentExists ? getCoworkStore().listSessionIdsByAgent(id) : [];
+      const router = getCoworkEngineRouter();
+      for (const sessionId of deletedSessionIds) {
+        router.stopSession(sessionId);
+      }
+
       const result = getAgentManager().deleteAgent(id);
 
       // Clean up IM platform bindings that reference the deleted agent
@@ -3282,10 +3289,25 @@ if (!gotTheLock) {
         // IM store may not be initialised yet; safe to ignore.
       }
 
+      if (result) {
+        for (const sessionId of deletedSessionIds) {
+          try {
+            getIMGatewayManager()?.getIMStore()?.deleteSessionMappingByCoworkSessionId(sessionId);
+          } catch {
+            // IM store may not be initialised yet; safe to ignore.
+          }
+          try {
+            router.onSessionDeleted(sessionId);
+          } catch {
+            // Router may not be initialised yet; safe to ignore.
+          }
+        }
+      }
+
       syncOpenClawConfig({ reason: 'agent-deleted' }).catch((err) => {
         console.error('[OpenClaw] config sync after agent-deleted failed:', err);
       });
-      return { success: true, deleted: result };
+      return { success: true, deleted: result, deletedSessionIds: result ? deletedSessionIds : [] };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Failed to delete agent' };
     }

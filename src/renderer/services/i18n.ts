@@ -791,7 +791,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     agentDeleteFailed: '删除 Agent 失败',
     agentDefaultCannotDelete: '主 Agent 不能删除',
     agentDeleteConfirmTitle: '确认删除 Agent',
-    agentDeleteConfirmMessage: '确定要删除 Agent「{name}」吗？此操作不可撤销。',
+    agentDeleteConfirmMessage: '确定要删除 Agent「{name}」及其任务记录吗？此操作不可撤销。',
     agentUnsavedTitle: '未保存的更改',
     agentUnsavedMessage: '离开后，当前 Agent 设置中的修改将丢失。',
     agentUnsavedStay: '继续编辑',
@@ -2629,7 +2629,7 @@ const translations: Record<LanguageType, Record<string, string>> = {
     agentDefaultCannotDelete: 'The primary Agent cannot be deleted',
     agentDeleteConfirmTitle: 'Confirm Delete Agent',
     agentDeleteConfirmMessage:
-      'Are you sure you want to delete Agent "{name}"? This action cannot be undone.',
+      'Are you sure you want to delete Agent "{name}" and its task history? This action cannot be undone.',
     agentUnsavedTitle: 'Unsaved Changes',
     agentUnsavedMessage: 'Your Agent setting changes will be lost if you leave.',
     agentUnsavedStay: 'Keep Editing',

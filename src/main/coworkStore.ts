@@ -6,7 +6,7 @@ import os from 'os';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
-import { normalizeAgentAvatarIcon } from '../shared/agent/avatar';
+import { AgentId, normalizeAgentAvatarIcon } from '../shared/agent';
 import { COWORK_MESSAGE_PAGE_SIZE, COWORK_SESSION_PAGE_SIZE } from '../shared/cowork/constants';
 
 
@@ -778,19 +778,50 @@ export class CoworkStore {
       .run(...values);
   }
 
+  listSessionIdsByAgent(agentId: string): string[] {
+    const rows = this.getAll<{ id: string }>(
+      'SELECT id FROM cowork_sessions WHERE agent_id = ?',
+      [agentId],
+    );
+    return rows.map(row => row.id);
+  }
+
+  private deleteSessionRows(ids: string[]): void {
+    if (ids.length === 0) return;
+    const placeholders = ids.map(() => '?').join(',');
+    this.db.prepare(`DELETE FROM cowork_messages WHERE session_id IN (${placeholders})`).run(...ids);
+    this.db.prepare(`DELETE FROM cowork_sessions WHERE id IN (${placeholders})`).run(...ids);
+  }
+
+  private deleteSessionsForAgent(agentId: string): string[] {
+    const sessionIds = this.listSessionIdsByAgent(agentId);
+    for (const sessionId of sessionIds) {
+      this.markMemorySourcesInactiveBySession(sessionId);
+    }
+    this.deleteSessionRows(sessionIds);
+    return sessionIds;
+  }
+
   deleteSession(id: string): void {
-    this.markMemorySourcesInactiveBySession(id);
-    this.db.prepare('DELETE FROM cowork_sessions WHERE id = ?').run(id);
+    const deleteSession = this.db.transaction((sessionId: string) => {
+      this.markMemorySourcesInactiveBySession(sessionId);
+      this.deleteSessionRows([sessionId]);
+    });
+    deleteSession(id);
     this.markOrphanImplicitMemoriesStale();
   }
 
   deleteSessions(ids: string[]): void {
-    if (ids.length === 0) return;
-    for (const id of ids) {
-      this.markMemorySourcesInactiveBySession(id);
-    }
-    const placeholders = ids.map(() => '?').join(',');
-    this.db.prepare(`DELETE FROM cowork_sessions WHERE id IN (${placeholders})`).run(...ids);
+    const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+    if (uniqueIds.length === 0) return;
+
+    const deleteSessions = this.db.transaction((sessionIds: string[]) => {
+      for (const id of sessionIds) {
+        this.markMemorySourcesInactiveBySession(id);
+      }
+      this.deleteSessionRows(sessionIds);
+    });
+    deleteSessions(uniqueIds);
     this.markOrphanImplicitMemoriesStale();
   }
 
@@ -2010,28 +2041,37 @@ export class CoworkStore {
       return this.createAgent({ ...request, id: `${id}-${Date.now()}` });
     }
 
-    this.db
-      .prepare(
-        `
-      INSERT INTO agents (id, name, description, system_prompt, identity, model, working_directory, icon, skill_ids, enabled, is_default, source, preset_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?, ?)
-    `,
-      )
-      .run(
-        id,
-        request.name,
-        request.description || '',
-        request.systemPrompt || '',
-        request.identity || '',
-        request.model || '',
-        request.workingDirectory || '',
-        normalizeAgentAvatarIcon(request.icon),
-        JSON.stringify(request.skillIds || []),
-        request.source || 'custom',
-        request.presetId || '',
-        now,
-        now,
-      );
+    let removedOrphanSessionCount = 0;
+    const createAgent = this.db.transaction(() => {
+      removedOrphanSessionCount = this.deleteSessionsForAgent(id).length;
+
+      this.db
+        .prepare(
+          `
+        INSERT INTO agents (id, name, description, system_prompt, identity, model, working_directory, icon, skill_ids, enabled, is_default, source, preset_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?, ?)
+      `,
+        )
+        .run(
+          id,
+          request.name,
+          request.description || '',
+          request.systemPrompt || '',
+          request.identity || '',
+          request.model || '',
+          request.workingDirectory || '',
+          normalizeAgentAvatarIcon(request.icon),
+          JSON.stringify(request.skillIds || []),
+          request.source || 'custom',
+          request.presetId || '',
+          now,
+          now,
+        );
+    });
+    createAgent();
+    if (removedOrphanSessionCount > 0) {
+      this.markOrphanImplicitMemoriesStale();
+    }
 
     return this.getAgent(id)!;
   }
@@ -2110,9 +2150,23 @@ export class CoworkStore {
   }
 
   deleteAgent(id: string): boolean {
-    if (id === 'main') return false; // Cannot delete default agent
-    this.db.prepare('DELETE FROM agents WHERE id = ? AND is_default = 0').run(id);
-    return true;
+    if (id === AgentId.Main) return false; // Cannot delete default agent
+
+    const deleteAgent = this.db.transaction((agentId: string): boolean => {
+      const result = this.db.prepare('DELETE FROM agents WHERE id = ? AND is_default = 0').run(agentId);
+      if (result.changes === 0) {
+        return false;
+      }
+
+      this.deleteSessionsForAgent(agentId);
+      return true;
+    });
+
+    const deleted = deleteAgent(id);
+    if (deleted) {
+      this.markOrphanImplicitMemoriesStale();
+    }
+    return deleted;
   }
 
   private mapAgentRow(row: {

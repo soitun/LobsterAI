@@ -1111,6 +1111,27 @@ const messageMetaClassName = (visible: boolean, align: 'left' | 'right' = 'left'
   visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
 ].filter(Boolean).join(' ');
 
+const UserMessageSkillBadges: React.FC<{ skills: Skill[] }> = ({ skills }) => {
+  if (skills.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {skills.map(skill => (
+        <div
+          key={skill.id}
+          className="inline-flex h-7 max-w-[240px] items-center gap-1.5 rounded-md bg-primary-muted px-2.5 text-[13px] font-normal leading-none text-foreground"
+          title={skill.description}
+        >
+          <PuzzleIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span className="min-w-0 truncate">
+            {skill.name}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // Copy button component
 const CopyButton: React.FC<{
   content: string;
@@ -1248,6 +1269,11 @@ export const UserMessageItem: React.FC<{
           <div className="flex items-start gap-3 flex-row-reverse">
             <div className="w-full min-w-0 flex flex-col items-end">
               <div className="w-fit max-w-full rounded-2xl px-4 py-2.5 bg-surface text-foreground shadow-subtle">
+                {messageSkills.length > 0 && (
+                  <div className={(displayContent?.trim() || imageAttachments.length > 0) ? 'mb-2' : ''}>
+                    <UserMessageSkillBadges skills={messageSkills} />
+                  </div>
+                )}
                 {displayContent?.trim() && (
                   <MarkdownContent
                     content={displayContent}
@@ -1280,22 +1306,6 @@ export const UserMessageItem: React.FC<{
                 )}
               </div>
               <div className={messageMetaClassName(isHovered, 'right')} aria-hidden={!isHovered}>
-                {messageSkills.length > 0 && (
-                  <div className="flex items-center gap-1.5 mr-1.5">
-                    {messageSkills.map(skill => (
-                      <div
-                        key={skill.id}
-                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary-muted"
-                        title={skill.description}
-                      >
-                        <PuzzleIcon className="h-2.5 w-2.5 text-primary" />
-                        <span className="text-[10px] font-medium text-primary max-w-[60px] truncate">
-                          {skill.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
                 <span>{formatMessageDateTime(message.timestamp)}</span>
                 {modelLabel && <span>{modelLabel}</span>}
                 <CopyButton
