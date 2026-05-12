@@ -5190,7 +5190,7 @@ if (!gotTheLock) {
       fs.mkdirSync(tmpDir, { recursive: true });
       const tmpFile = path.join(tmpDir, `preview-${Date.now()}.html`);
       fs.writeFileSync(tmpFile, htmlContent, 'utf-8');
-      await shell.openExternal(`file://${tmpFile}`);
+      await shell.openPath(tmpFile);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

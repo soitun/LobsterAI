@@ -187,10 +187,12 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
       return;
     }
 
-    // Has file on disk: open directly
+    // Has file on disk: open directly via native path
+    // NOTE: shell.openExternal with file:// URLs fails on Windows when path contains
+    // non-ASCII characters (e.g. Chinese) — ERROR_FILE_NOT_FOUND (0x2).
+    // Use shell.openPath which handles native Unicode paths correctly.
     if (selectedArtifact.filePath) {
-      const fileUrl = `file://${selectedArtifact.filePath}`;
-      window.electron?.shell?.openExternal(fileUrl);
+      window.electron?.shell?.openPath(selectedArtifact.filePath);
       return;
     }
 
