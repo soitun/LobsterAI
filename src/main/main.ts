@@ -5192,8 +5192,21 @@ if (!gotTheLock) {
         const { exec } = require('child_process');
         const { promisify } = require('util');
         const execAsync = promisify(exec);
-        await execAsync(`osascript -e 'tell application "System Events" to key code 63' -e 'delay 0.05' -e 'tell application "System Events" to key code 63'`);
-        return { success: true };
+        try {
+          await execAsync(`osascript -e 'tell application "System Events" to key code 63' -e 'delay 0.05' -e 'tell application "System Events" to key code 63'`);
+          return { success: true };
+        } catch (darwinError: unknown) {
+          const stderr = typeof darwinError === 'object' && darwinError && 'stderr' in darwinError
+            ? String((darwinError as { stderr?: unknown }).stderr ?? '')
+            : '';
+          if (stderr.includes('not allowed assistive access') ||
+              stderr.includes('assistive') ||
+              stderr.includes('not authorized') ||
+              stderr.includes('1002')) {
+            return { success: false, error: 'permission_denied' };
+          }
+          return { success: false, error: darwinError instanceof Error ? darwinError.message : 'Unknown error' };
+        }
       }
       return { success: false, error: 'Unsupported platform' };
     } catch (error) {
