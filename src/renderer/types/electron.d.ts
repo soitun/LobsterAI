@@ -658,8 +658,14 @@ interface IElectronAPI {
       sessionKey?: string;
     }>;
     weixinQrLoginWait: (
-      accountId?: string,
-    ) => Promise<{ success: boolean; connected: boolean; message: string; accountId?: string }>;
+      sessionKey?: string,
+    ) => Promise<{
+      success: boolean;
+      connected: boolean;
+      message: string;
+      accountId?: string;
+      alreadyConnected?: boolean;
+    }>;
 
     // POPO QR login
     popoQrLoginStart: () => Promise<{
@@ -1587,6 +1593,7 @@ interface PopoGatewayStatus {
 
 interface WeixinGatewayStatus {
   connected: boolean;
+  accountId: string | null;
   startedAt: number | null;
   lastError: string | null;
   lastInboundAt: number | null;

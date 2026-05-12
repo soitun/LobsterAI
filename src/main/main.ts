@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron';
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, powerSaveBlocker, protocol, screen, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, powerSaveBlocker, protocol, screen, session, shell, systemPreferences } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -8,7 +8,7 @@ import type { OpenClawSessionPatch } from '../common/openclawSession';
 import { buildSessionTitleFromInput } from '../common/sessionTitle';
 import { buildScheduledTaskEnginePrompt } from '../scheduledTask/enginePrompt';
 import { migrateScheduledTaskRunsToOpenclaw, migrateScheduledTasksToOpenclaw } from '../scheduledTask/migrate';
-import { AgentIpcChannel } from '../shared/agent/constants';
+import { AgentId, AgentIpcChannel } from '../shared/agent/constants';
 import { AppUpdateIpc } from '../shared/appUpdate/constants';
 import { COWORK_MESSAGE_PAGE_SIZE, COWORK_SESSION_PAGE_SIZE } from '../shared/cowork/constants';
 import { PlatformRegistry } from '../shared/platform';
@@ -3316,6 +3316,13 @@ if (!gotTheLock) {
 
   ipcMain.handle(AgentIpcChannel.Delete, async (_event, id: string) => {
     try {
+      const agentExists = id !== AgentId.Main && getAgentManager().getAgent(id) !== null;
+      const deletedSessionIds = agentExists ? getCoworkStore().listSessionIdsByAgent(id) : [];
+      const router = getCoworkEngineRouter();
+      for (const sessionId of deletedSessionIds) {
+        router.stopSession(sessionId);
+      }
+
       const result = getAgentManager().deleteAgent(id);
 
       // Clean up IM platform bindings that reference the deleted agent
@@ -3342,10 +3349,25 @@ if (!gotTheLock) {
         // IM store may not be initialised yet; safe to ignore.
       }
 
+      if (result) {
+        for (const sessionId of deletedSessionIds) {
+          try {
+            getIMGatewayManager()?.getIMStore()?.deleteSessionMappingByCoworkSessionId(sessionId);
+          } catch {
+            // IM store may not be initialised yet; safe to ignore.
+          }
+          try {
+            router.onSessionDeleted(sessionId);
+          } catch {
+            // Router may not be initialised yet; safe to ignore.
+          }
+        }
+      }
+
       syncOpenClawConfig({ reason: 'agent-deleted' }).catch((err) => {
         console.error('[OpenClaw] config sync after agent-deleted failed:', err);
       });
-      return { success: true, deleted: result };
+      return { success: true, deleted: result, deletedSessionIds: result ? deletedSessionIds : [] };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Failed to delete agent' };
     }
@@ -4181,9 +4203,9 @@ if (!gotTheLock) {
     }
   });
 
-  ipcMain.handle('im:weixin:qr-login-wait', async (_event, accountId?: string) => {
+  ipcMain.handle('im:weixin:qr-login-wait', async (_event, sessionKey?: string) => {
     try {
-      const result = await getIMGatewayManager().weixinQrLoginWait(accountId);
+      const result = await getIMGatewayManager().weixinQrLoginWait(sessionKey);
       return { success: true, ...result };
     } catch (error) {
       return { success: false, connected: false, message: error instanceof Error ? error.message : 'Weixin QR login failed' };
@@ -4260,7 +4282,7 @@ if (!gotTheLock) {
 
   ipcMain.handle('im:status:get', async () => {
     try {
-      const status = getIMGatewayManager().getStatus();
+      const status = await getIMGatewayManager().getStatusWithOpenClawRuntime();
       return { success: true, status };
     } catch (error) {
       return {
@@ -5240,23 +5262,89 @@ if (!gotTheLock) {
   // Voice dictation - trigger OS-level speech-to-text
   ipcMain.handle('voice:triggerDictation', async () => {
     try {
+      console.log(`[Voice] Dictation shortcut requested on ${process.platform}`);
       if (process.platform === 'win32') {
         const { exec } = require('child_process');
         const { promisify } = require('util');
         const execAsync = promisify(exec);
         // Simulate Win+H via keybd_event P/Invoke
-        await execAsync(`powershell -NoProfile -Command "Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class KS{[DllImport(\\\"user32.dll\\\")]public static extern void keybd_event(byte k,byte s,uint f,int e);public static void WinH(){keybd_event(0x5B,0,0,0);keybd_event(0x48,0,0,0);keybd_event(0x48,0,2,0);keybd_event(0x5B,0,2,0);}}'; [KS]::WinH()"`);
+        await execAsync(`powershell -NoProfile -Command "Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class KS{[DllImport(\\\"user32.dll\\\")]public static extern void keybd_event(byte k,byte s,uint f,int e);public static void WinH(){keybd_event(0x5B,0,0,0);keybd_event(0x48,0,0,0);keybd_event(0x48,0,2,0);keybd_event(0x5B,0,2,0);}}'; [KS]::WinH()"`, { timeout: 5000 });
+        console.log('[Voice] Windows dictation shortcut sent successfully');
         return { success: true };
       } else if (process.platform === 'darwin') {
-        // macOS: simulate Fn+Fn (dictation trigger) via AppleScript
+        if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+          console.warn('[Voice] macOS Accessibility permission is missing, requesting permission');
+          systemPreferences.isTrustedAccessibilityClient(true);
+          return { success: false, error: 'permission_denied' };
+        }
+
+        // macOS: prefer the system Edit > Start Dictation menu item; keyboard events are less reliable.
         const { exec } = require('child_process');
         const { promisify } = require('util');
         const execAsync = promisify(exec);
-        await execAsync(`osascript -e 'tell application "System Events" to key code 63' -e 'delay 0.05' -e 'tell application "System Events" to key code 63'`);
-        return { success: true };
+        try {
+          await execAsync(`osascript -e 'tell application "System Events"
+  set frontProcess to first application process whose frontmost is true
+  tell frontProcess
+    set editMenu to missing value
+    repeat with menuBarItem in menu bar items of menu bar 1
+      set itemName to name of menuBarItem
+      if itemName is "Edit" or itemName is "编辑" then
+        set editMenu to menu 1 of menuBarItem
+        exit repeat
+      end if
+    end repeat
+    if editMenu is missing value then error "Edit menu not found"
+    set dictationItem to missing value
+    repeat with menuItem in menu items of editMenu
+      set itemName to name of menuItem
+      if itemName contains "Dictation" or itemName contains "听写" then
+        set dictationItem to menuItem
+        exit repeat
+      end if
+    end repeat
+    if dictationItem is missing value then error "Dictation menu item not found"
+    click dictationItem
+  end tell
+end tell'`, { timeout: 5000 });
+          console.log('[Voice] macOS dictation menu item clicked successfully');
+          return { success: true };
+        } catch (menuError: unknown) {
+          console.warn('[Voice] macOS dictation menu item failed, falling back to keyboard shortcut:', menuError);
+        }
+
+        try {
+          await execAsync(`osascript -e 'tell application "System Events" to key code 96'`, { timeout: 5000 });
+          console.log('[Voice] macOS dictation key shortcut sent successfully');
+          return { success: true };
+        } catch (dictationKeyError: unknown) {
+          console.warn('[Voice] macOS dictation key shortcut failed, falling back to Fn shortcut:', dictationKeyError);
+        }
+
+        try {
+          await execAsync(`osascript -e 'tell application "System Events" to key code 63' -e 'delay 0.05' -e 'tell application "System Events" to key code 63'`, { timeout: 5000 });
+          console.log('[Voice] macOS Fn dictation shortcut sent successfully');
+          return { success: true };
+        } catch (darwinError: unknown) {
+          const stderr = typeof darwinError === 'object' && darwinError && 'stderr' in darwinError
+            ? String((darwinError as { stderr?: unknown }).stderr ?? '')
+            : '';
+          const message = darwinError instanceof Error ? darwinError.message : String(darwinError);
+          const lowerErrorText = `${stderr}\n${message}`.toLowerCase();
+          if (lowerErrorText.includes('not allowed assistive access') ||
+              lowerErrorText.includes('assistive') ||
+              lowerErrorText.includes('not authorized') ||
+              lowerErrorText.includes('1002')) {
+            return { success: false, error: 'permission_denied' };
+          }
+          console.warn('[Voice] macOS dictation shortcut failed:', darwinError);
+          return { success: false, error: message || 'Unknown error' };
+        }
       }
+      console.warn(`[Voice] Dictation shortcut is unsupported on ${process.platform}`);
       return { success: false, error: 'Unsupported platform' };
     } catch (error) {
+      console.warn('[Voice] Dictation shortcut failed:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   });

@@ -214,9 +214,18 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
     const [showAgentMenu, setShowAgentMenu] = useState(false);
     const [isReadOnlyContextCompact, setIsReadOnlyContextCompact] = useState(false);
 
-    const handleVoiceInput = useCallback(() => {
+    const handleVoiceInput = useCallback(async () => {
       textareaRef.current?.focus();
-      triggerSystemDictation();
+      const result = await triggerSystemDictation();
+      if (!result.success && result.error === 'permission_denied') {
+        window.dispatchEvent(new CustomEvent('app:showToast', {
+          detail: i18nService.t('voiceInputPermissionDenied'),
+        }));
+      } else if (!result.success) {
+        window.dispatchEvent(new CustomEvent('app:showToast', {
+          detail: i18nService.t('voiceInputFailed'),
+        }));
+      }
     }, []);
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -257,6 +266,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
 
   const activeSkillIds = useSelector((state: RootState) => state.skill.activeSkillIds);
   const skills = useSelector((state: RootState) => state.skill.skills);
+  const hasActiveSkills = activeSkillIds.some(id => skills.some(skill => skill.id === id));
   const currentAgent = agents.find((agent) => agent.id === currentAgentId);
   const currentAgentSelectedModel = useAgentSelectedModel(currentAgentId, currentAgent?.model ?? '');
   const {
@@ -279,7 +289,11 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
 
   const isLarge = size === 'large';
   const useHomeContextLayout = isLarge && showAgentSelector;
-  const minHeight = isLarge ? (useHomeContextLayout ? 52 : 60) : 24;
+  const minHeight = isLarge
+    ? useHomeContextLayout
+      ? hasActiveSkills ? 36 : 52
+      : hasActiveSkills ? 44 : 60
+    : 24;
   const maxHeight = isLarge ? 200 : 200;
 
   const effectiveSelectedModel = resolveEffectiveModel({
@@ -605,8 +619,8 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
   const textareaClass = isLarge
     ? `w-full resize-none bg-transparent px-4 pb-2 text-foreground placeholder:dark:text-foregroundSecondary/60 placeholder:text-secondary/60 focus:outline-none min-h-[${minHeight}px] max-h-[${maxHeight}px] ${
       useHomeContextLayout
-        ? 'pt-3 text-[14px] leading-[22px]'
-        : 'pt-2.5 text-[15px] leading-[23px]'
+        ? `${hasActiveSkills ? 'pt-2' : 'pt-3'} text-[14px] leading-[22px]`
+        : `${hasActiveSkills ? 'pt-2' : 'pt-2.5'} text-[15px] leading-[23px]`
     }`
     : 'flex-1 resize-none bg-transparent text-foreground placeholder:placeholder:text-secondary focus:outline-none text-sm leading-relaxed min-h-[24px] max-h-[200px]';
 
@@ -1066,7 +1080,6 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
         onSelectSkill={handleSelectSkill}
         onManageSkills={handleManageSkills}
       />
-      <ActiveSkillBadge />
     </>
   ) : null;
 
@@ -1095,6 +1108,23 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
       <ArrowUpIcon className="h-[18px] w-[18px]" />
     </button>
   );
+
+  const activeSkillContextRow = isLarge && hasActiveSkills ? (
+    <div
+      className="flex cursor-text flex-wrap items-center gap-x-2 gap-y-1 px-4 pt-4"
+      onClick={() => {
+        if (!disabled) textareaRef.current?.focus();
+      }}
+    >
+      <ActiveSkillBadge />
+      {!value.trim() && (
+        <span className="min-w-[120px] select-none text-[14px] font-normal leading-[22px] text-muted">
+          {placeholder}
+        </span>
+      )}
+    </div>
+  ) : null;
+  const textareaPlaceholder = hasActiveSkills ? '' : placeholder;
 
   const readOnlyContextRow = isLarge && showReadOnlyContext && !useHomeContextLayout ? (
     <div className="mt-2 grid min-h-7 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4">
@@ -1187,13 +1217,14 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
           useHomeContextLayout ? (
             <>
               <div className="relative z-10 rounded-2xl border border-border bg-surface shadow-card">
+                {activeSkillContextRow}
                 <textarea
                   ref={textareaRef}
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onPaste={handlePaste}
-                  placeholder={placeholder}
+                  placeholder={textareaPlaceholder}
                   disabled={disabled}
                   rows={2}
                   className={textareaClass}
@@ -1288,13 +1319,14 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
             </>
           ) : (
             <>
+              {activeSkillContextRow}
               <textarea
                 ref={textareaRef}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                placeholder={placeholder}
+                placeholder={textareaPlaceholder}
                 disabled={disabled}
                 rows={2}
                 className={textareaClass}

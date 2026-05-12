@@ -28,6 +28,7 @@ import {
   updateSessionStatus,
   updateSessionTitle,
 } from '../store/slices/coworkSlice';
+import { clearActiveSkills, setActiveSkillIds } from '../store/slices/skillSlice';
 import type {
   CoworkApiConfig,
   CoworkConfigUpdate,
@@ -52,6 +53,16 @@ const classifyError = (error: string): string => {
 const CONTEXT_USAGE_REFRESH_DELAY_MS = 800;
 const FINAL_CONTEXT_USAGE_REFRESH_DELAYS_MS = [800, 2500, 6000, 12000] as const;
 const SESSION_ENTRY_CONTEXT_USAGE_REFRESH_COOLDOWN_MS = 1500;
+
+const restoreCurrentAgentDefaultSkills = (): void => {
+  const state = store.getState();
+  const currentAgent = state.agent.agents.find((agent) => agent.id === state.agent.currentAgentId);
+  if (currentAgent?.skillIds?.length) {
+    store.dispatch(setActiveSkillIds(currentAgent.skillIds));
+  } else {
+    store.dispatch(clearActiveSkills());
+  }
+};
 
 class CoworkService {
   private streamListenerCleanups: Array<() => void> = [];
@@ -980,8 +991,11 @@ class CoworkService {
     return window.electron.getRecentCwds(limit);
   }
 
-  clearSession(): void {
+  clearSession(options: { restoreAgentSkills?: boolean } = {}): void {
     store.dispatch(clearCurrentSession());
+    if (options.restoreAgentSkills) {
+      restoreCurrentAgentDefaultSkills();
+    }
   }
 
   destroy(): void {
