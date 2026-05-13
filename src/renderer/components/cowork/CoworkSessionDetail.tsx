@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { getScheduledReminderDisplayText } from '../../../scheduledTask/reminderText';
-import { getArtifactTypeFromExtension, normalizeFilePathForDedup, parseCodeBlockArtifacts, parseFileLinksFromMessage, parseFilePathsFromText, parseToolArtifact, stripFileLinksFromText } from '../../services/artifactParser';
+import { getArtifactTypeFromExtension, normalizeFilePathForDedup, parseFileLinksFromMessage, parseFilePathsFromText, parseToolArtifact, stripFileLinksFromText } from '../../services/artifactParser';
 import { coworkService } from '../../services/cowork';
 import { i18nService } from '../../services/i18n';
 import { RootState } from '../../store';
@@ -1819,9 +1819,6 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
 
       for (const msg of messages) {
         if (msg.type === 'assistant' && !msg.metadata?.isThinking && msg.content) {
-          const codeBlockArtifacts = parseCodeBlockArtifacts(msg.content, msg.id, sessionId);
-          detected.push(...codeBlockArtifacts);
-
           const fileLinks = parseFileLinksFromMessage(msg.content, msg.id, sessionId);
           for (const fl of fileLinks) {
             const normalized = fl.filePath ? normalizeFilePathForDedup(fl.filePath) : '';
@@ -1868,15 +1865,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
               seenFilePaths.add(normalized);
               detected.push(toolArtifact);
             }
-          } else if (toolArtifact && !toolArtifact.filePath) {
-            detected.push(toolArtifact);
           }
-        }
-      }
-
-      for (const a of detected) {
-        if (!a.filePath) {
-          dispatch(addArtifact({ sessionId, artifact: a }));
         }
       }
 
@@ -1984,7 +1973,6 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
           content: '',
           fileName,
           filePath,
-          source: 'tool',
           createdAt: Date.now(),
         };
         dispatch(addArtifact({ sessionId, artifact: newArtifact }));

@@ -554,6 +554,8 @@ interface IElectronAPI {
     showItemInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
     openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
     openHtmlInBrowser: (htmlContent: string) => Promise<{ success: boolean; error?: string }>;
+    getAppsForFile: (filePath: string) => Promise<{ success: boolean; apps: Array<{ name: string; path: string; isDefault: boolean; icon?: string }>; error?: string }>;
+    openPathWithApp: (filePath: string, appPath: string) => Promise<{ success: boolean; error?: string }>;
   };
   voice: {
     triggerDictation: () => Promise<{ success: boolean; error?: string }>;

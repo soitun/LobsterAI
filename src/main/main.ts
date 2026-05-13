@@ -5067,7 +5067,7 @@ if (!gotTheLock) {
   );
 
   // Read a local file as a data URL (data:<mime>;base64,...)
-  const MAX_READ_AS_DATA_URL_BYTES = 20 * 1024 * 1024;
+  const MAX_READ_AS_DATA_URL_BYTES = 100 * 1024 * 1024;
   const MIME_BY_EXT: Record<string, string> = {
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
@@ -5191,6 +5191,26 @@ if (!gotTheLock) {
       const tmpFile = path.join(tmpDir, `preview-${Date.now()}.html`);
       fs.writeFileSync(tmpFile, htmlContent, 'utf-8');
       await shell.openPath(tmpFile);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('shell:getAppsForFile', async (_event, filePath: string) => {
+    try {
+      const { getAppsForFile } = await import('./shellApps');
+      const apps = await getAppsForFile(filePath);
+      return { success: true, apps };
+    } catch (error) {
+      return { success: false, apps: [], error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('shell:openPathWithApp', async (_event, filePath: string, appPath: string) => {
+    try {
+      const { openFileWithApp } = await import('./shellApps');
+      await openFileWithApp(filePath, appPath);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

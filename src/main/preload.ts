@@ -378,6 +378,8 @@ contextBridge.exposeInMainWorld('electron', {
     showItemInFolder: (filePath: string) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
     openHtmlInBrowser: (htmlContent: string) => ipcRenderer.invoke('shell:openHtmlInBrowser', htmlContent),
+    getAppsForFile: (filePath: string) => ipcRenderer.invoke('shell:getAppsForFile', filePath),
+    openPathWithApp: (filePath: string, appPath: string) => ipcRenderer.invoke('shell:openPathWithApp', filePath, appPath),
   },
   clipboard: {
     writeImageFromFile: (filePath: string) =>
