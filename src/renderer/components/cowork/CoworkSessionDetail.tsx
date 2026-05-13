@@ -40,7 +40,6 @@ import type { Skill } from '../../types/skill';
 import { formatMessageDateTime } from '../../utils/tokenFormat';
 import { parseUserMessageForDisplay } from '../../utils/userMessageDisplay';
 import { ArtifactPanel, ArtifactPreviewCard } from '../artifacts';
-import Modal from '../common/Modal';
 import ComposeIcon from '../icons/ComposeIcon';
 import CopyIcon from '../icons/CopyIcon';
 import ExclamationTriangleIcon from '../icons/ExclamationTriangleIcon';
@@ -1720,6 +1719,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   const detailRootRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const promptInputRef = useRef<CoworkPromptInputRef>(null);
+  const compactConfirmRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [showCompactConfirm, setShowCompactConfirm] = useState(false);
@@ -1740,6 +1740,30 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   useEffect(() => {
     setShowCompactConfirm(false);
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!showCompactConfirm) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && compactConfirmRef.current?.contains(target)) {
+        return;
+      }
+      setShowCompactConfirm(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowCompactConfirm(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showCompactConfirm]);
 
   // Rail navigation states
   const [currentRailIndex, setCurrentRailIndex] = useState(-1);
@@ -1780,8 +1804,8 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
       }));
       return;
     }
-    console.debug('[CoworkSessionDetail] manual context compaction confirmation requested.');
-    setShowCompactConfirm(true);
+    console.debug('[CoworkSessionDetail] manual context compaction confirmation toggled.');
+    setShowCompactConfirm(prev => !prev);
   }, [currentSession?.id, currentSession?.status, isContextCompacting, isContextMaintenance, isStreaming]);
 
   const handleCancelCompactContext = useCallback(() => {
@@ -3074,13 +3098,35 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
             contextAgentId={currentSession?.agentId}
             sessionId={currentSession?.id}
             contextUsageControl={(
-              <ContextUsageIndicator
-                usage={contextUsage}
-                compacting={isContextCompacting}
-                disabled={remoteManaged || !currentSession?.id}
-                onCompact={handleCompactContext}
-                className="-mr-1"
-              />
+              <div ref={compactConfirmRef} className="relative inline-flex flex-shrink-0">
+                <ContextUsageIndicator
+                  usage={contextUsage}
+                  compacting={isContextCompacting}
+                  disabled={remoteManaged || !currentSession?.id}
+                  onCompact={handleCompactContext}
+                  showTooltip={!showCompactConfirm}
+                  active={showCompactConfirm}
+                  className="-mr-1"
+                />
+                {showCompactConfirm && (
+                  <div className="absolute bottom-full left-1/2 z-50 mb-1.5 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-border bg-surface p-1.5 shadow-popover">
+                    <button
+                      type="button"
+                      onClick={handleCancelCompactContext}
+                      className="whitespace-nowrap rounded-md bg-surface-raised px-2.5 py-1 text-center text-[11px] font-medium leading-4 text-secondary transition-colors hover:text-foreground"
+                    >
+                      {i18nService.t('cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmCompactContext}
+                      className="whitespace-nowrap rounded-md bg-primary px-2.5 py-1 text-center text-[11px] font-semibold leading-4 text-white transition-colors hover:bg-primary-hover"
+                    >
+                      {i18nService.t('coworkContextCompactConfirmActionShort')}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           />
         </div>
@@ -3113,38 +3159,6 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
         </div>
       </div>
     )}
-    <Modal
-      isOpen={showCompactConfirm}
-      onClose={handleCancelCompactContext}
-      className="w-[min(420px,calc(100vw-32px))] rounded-xl border border-border bg-background p-5 shadow-xl"
-    >
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-base font-semibold text-primary">
-            {i18nService.t('coworkContextCompactConfirmTitle')}
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-secondary">
-            {i18nService.t('coworkContextCompactConfirm')}
-          </p>
-        </div>
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={handleCancelCompactContext}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-secondary hover:bg-surface-raised"
-          >
-            {i18nService.t('cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirmCompactContext}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
-          >
-            {i18nService.t('coworkContextCompactConfirmAction')}
-          </button>
-        </div>
-      </div>
-    </Modal>
     </div>
     </div>
   );
