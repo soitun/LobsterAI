@@ -270,6 +270,48 @@ function getChannelTitlePrefix(platform: string): string {
   return `[${label}]`;
 }
 
+const PEER_KIND_LABELS: Record<string, string> = {
+  direct: '',
+  group: 'group:',
+  channel: 'ch:',
+};
+
+/**
+ * Build a human-readable display name from a structured conversationId.
+ *
+ * conversationId formats (from parseChannelSessionKey):
+ *   - "{peerKind}:{peerId}"                  e.g. "direct:alice@corp.example.com"
+ *   - "{accountId}:{peerKind}:{peerId}"      e.g. "bot1:group:12345@popo.netease.com"
+ *   - plain id                               e.g. "123456789"
+ *
+ * Steps:
+ *   1. Strip email domain (@...) from the raw conversationId.
+ *   2. Extract peerKind (direct/group/channel) and the trailing peerId.
+ *   3. For "direct", show just the peerId; for "group"/"channel", add a short prefix.
+ *   4. Truncate the final result to 20 characters if needed.
+ *
+ * @see https://docs.openclaw.ai/reference/session-management-compaction#session-keys-sessionkey
+ */
+export function buildChannelDisplayName(conversationId: string): string {
+  // 1. Strip email domain
+  const stripped = conversationId.replace(/@[^:]+/g, '');
+
+  // 2. Try to extract peerKind from the segments
+  const segments = stripped.split(':');
+  for (let i = 0; i < segments.length; i++) {
+    const kind = segments[i];
+    if (kind in PEER_KIND_LABELS) {
+      const peerId = segments.slice(i + 1).join(':') || stripped;
+      const prefix = PEER_KIND_LABELS[kind];
+      const display = `${prefix}${peerId}`;
+      return display.length > 20 ? display.slice(0, 20) : display;
+    }
+  }
+
+  // 3. Fallback: no recognized peerKind, use the stripped value as-is
+  return stripped.length > 20 ? stripped.slice(-20) : stripped;
+}
+
 export interface ChannelSessionSyncDeps {
   coworkStore: CoworkStore;
   imStore: IMStore;
@@ -399,11 +441,7 @@ export class OpenClawChannelSessionSync {
             '— creating new session',
           );
           const titlePrefix = getChannelTitlePrefix(parsed.platform);
-          const displayId = parsed.conversationId.includes('@')
-            ? parsed.conversationId.split('@')[0]
-            : parsed.conversationId;
-          const shortId = displayId.length > 12 ? displayId.slice(-12) : displayId;
-          const title = `${titlePrefix} ${shortId}`;
+          const title = `${titlePrefix} ${buildChannelDisplayName(parsed.conversationId)}`;
           const cwd = this.getDefaultCwd(currentAgentId);
           const newSession = this.coworkStore.createSession(
             title,
@@ -445,13 +483,7 @@ export class OpenClawChannelSessionSync {
 
     // 5. Create new Cowork session
     const titlePrefix = getChannelTitlePrefix(parsed.platform);
-    // For conversationIds that look like email addresses (e.g. POPO),
-    // use the local part before '@' as the display name.
-    const displayId = parsed.conversationId.includes('@')
-      ? parsed.conversationId.split('@')[0]
-      : parsed.conversationId;
-    const shortId = displayId.length > 12 ? displayId.slice(-12) : displayId;
-    const title = `${titlePrefix} ${shortId}`;
+    const title = `${titlePrefix} ${buildChannelDisplayName(parsed.conversationId)}`;
     // Look up the per-platform agent binding so the session is filed under the correct agent.
     const imSettings = this.imStore.getIMSettings();
     const accountId = extractAccountIdFromKey(sessionKey);
