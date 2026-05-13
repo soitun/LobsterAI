@@ -1103,10 +1103,10 @@ npx eslint src/main/libs/agentEngine/openclawRuntimeAdapter.ts src/main/libs/age
 
 开发测试策略：
 
-- 当前分支临时将 LobsterAI 同步给 OpenClaw `models.json` 的 `contextWindow` override 保留为 `60_000`，用于更容易触发 memory flush / pre-compaction / overflow 相关路径。
-- 该改动是当前本地验证要求保留的测试配置，后续发布前需单独确认是否恢复生产默认窗口策略。
-- 该覆盖值仅影响 LobsterAI 同步给 OpenClaw 的模型配置；如果 OpenClaw provider catalog 对某模型有更高优先级，最终分母仍应以 OpenClaw `sessions.list` 返回的 `contextTokens` 为准。
-- 即使 OpenClaw 按 `60_000` 计算 usage 和阈值，底层 provider/model 可能实际可接收超过 60k 的上下文；因此 `80k / 60k` 不必然意味着 provider 已拒绝，也不必然意味着 checkpoint compaction 已生成。
+- 测试期间曾临时将 LobsterAI 同步给 OpenClaw `models.json` 的 `contextWindow` override 设为 `60_000`，用于更容易触发 memory flush / pre-compaction / overflow 相关路径。
+- 该测试 override 已在发布前移除，生产逻辑恢复为：仅当 provider 本身声明 `modelDefaults.contextWindow` 时同步该值；未知模型不强行写入窗口，继续由 OpenClaw 使用默认 `200k` 兜底。
+- 测试覆盖值仅影响 LobsterAI 同步给 OpenClaw 的模型配置；如果 OpenClaw provider catalog 对某模型有更高优先级，最终分母仍应以 OpenClaw `sessions.list` 返回的 `contextTokens` 为准。
+- 即使 OpenClaw 在测试期间按 `60_000` 计算 usage 和阈值，底层 provider/model 可能实际可接收超过 60k 的上下文；因此 `80k / 60k` 不必然意味着 provider 已拒绝，也不必然意味着 checkpoint compaction 已生成。
 
 ### 7.3 性能与内存
 
@@ -1308,7 +1308,7 @@ Model: deepseek/deepseek-v4-pro
 
 测试背景：
 
-- 本地将 LobsterAI 同步给 OpenClaw 的 context window override 保留为 `60_000`。
+- 测试时本地曾将 LobsterAI 同步给 OpenClaw 的 context window override 设为 `60_000`，用于更快复现相关路径；该 override 已在发布前移除。
 - 测试 session key：
 
 ```text
