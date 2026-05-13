@@ -192,6 +192,8 @@ type ActiveTurn = {
   bufferedAgentPayloads: BufferedAgentEvent[];
   /** Client-side timeout watchdog timer (fallback for missing gateway abort events). */
   timeoutTimer?: ReturnType<typeof setTimeout>;
+  /** Media URLs from tool results (e.g. image_generate) to append at finalization. */
+  pendingMediaUrls: string[];
 };
 
 type BufferedChatEvent = {
@@ -590,6 +592,62 @@ const extractTextBlocksAndSignals = (
     textBlocks,
     sawNonTextContentBlocks,
   };
+};
+
+/**
+ * Convert a local file path (Windows or Mac/Linux) or URL to a markdown image.
+ * Normalizes backslashes → forward slashes for cross-platform compatibility.
+ */
+const toMarkdownImage = (pathOrUrl: string): string => {
+  const trimmed = pathOrUrl.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return `![](${trimmed})`;
+  }
+  const normalized = trimmed.replace(/\\/g, '/');
+  const urlPath = /^[A-Za-z]:/.test(normalized)
+    ? `/${normalized}`
+    : normalized.startsWith('/')
+      ? normalized
+      : `/${normalized}`;
+  const encoded = encodeURI(urlPath).replace(/[()]/g, c =>
+    `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `![](file://${encoded})`;
+};
+
+/**
+ * Extract file/URL paths from MEDIA: tokens in text.
+ * Matches patterns like: MEDIA:C:\path\to\image.jpg or MEDIA:/path/to/image.jpg
+ */
+const extractMediaTokenPaths = (text: string): string[] => {
+  const paths: string[] = [];
+  const re = /\bMEDIA:\s*`?([^\s`\n]+)`?/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const p = m[1].trim();
+    if (p) paths.push(p);
+  }
+  return paths;
+};
+
+/**
+ * Strip MEDIA: tokens from text and append any unreferenced media URLs as
+ * markdown images.  Only mutates the text when mediaUrls is non-empty.
+ */
+const appendMediaMarkdown = (text: string, mediaUrls: string[]): string => {
+  if (!mediaUrls || !mediaUrls.length) return text;
+
+  let cleaned = text.replace(/\n?MEDIA:\s*`?[^\s`\n]+`?/gi, '').trimEnd();
+
+  const unreferenced = mediaUrls.filter(url => {
+    const normalized = url.replace(/\\/g, '/');
+    const filename = normalized.split('/').pop() || '';
+    return !filename || !cleaned.includes(filename);
+  });
+
+  if (!unreferenced.length) return cleaned || text;
+
+  const images = unreferenced.map(toMarkdownImage).join('\n');
+  return cleaned ? `${cleaned}\n\n${images}` : images;
 };
 
 /**
@@ -1723,6 +1781,7 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
       pendingUserSync: false,
       bufferedChatPayloads: [],
       bufferedAgentPayloads: [],
+      pendingMediaUrls: [],
     });
     this.sessionIdByRunId.set(runId, sessionId);
 
@@ -2487,6 +2546,16 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
     if (event.event === 'cron') {
       console.debug('[OpenClawRuntime] received cron event:', JSON.stringify(event));
     }
+
+    // Capture session.tool events for media extraction
+    if (event.event === 'session.tool') {
+      console.log('[Debug:session.tool]', JSON.stringify(event.payload).slice(0, 1500));
+    }
+
+    // Log unhandled event types (temporary debug)
+    if (!['tick', 'chat', 'agent', 'exec.approval.requested', 'exec.approval.resolved', 'cron', 'session.tool'].includes(event.event)) {
+      console.log('[Debug:unhandledEvent]', `event=${event.event}`, JSON.stringify(event.payload).slice(0, 300));
+    }
   }
 
   private handleAgentEvent(payload: unknown, seq?: number): void {
@@ -2893,10 +2962,24 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
     const rawPhase = typeof data.phase === 'string' ? data.phase.trim() : '';
     const phase = rawPhase === 'end' ? 'result' : rawPhase;
     const toolCallId = typeof data.toolCallId === 'string' ? data.toolCallId.trim() : '';
+    const toolNameRaw = typeof data.name === 'string' ? data.name.trim() : '';
+
+    // Temporary debug: log all image_generate tool events
+    if (toolNameRaw.includes('image_generate') || (phase === 'result' && !toolCallId)) {
+      console.log(
+        '[Debug:toolEvent]',
+        `phase=${rawPhase}→${phase}`,
+        `toolCallId=${toolCallId}`,
+        `name=${toolNameRaw}`,
+        `dataKeys=${Object.keys(data).join(',')}`,
+        `hasResult=${data.result !== undefined}`,
+        `data=${JSON.stringify(data).slice(0, 800)}`,
+      );
+    }
+
     if (!toolCallId) return;
     if (phase !== 'start' && phase !== 'update' && phase !== 'result') return;
 
-    const toolNameRaw = typeof data.name === 'string' ? data.name.trim() : '';
     const toolName = toolNameRaw || 'Tool';
 
     if (toolNameRaw.toLowerCase() === 'browser') {
@@ -2998,6 +3081,13 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
 
     if (phase === 'result') {
       const incoming = extractToolText(data.result);
+      console.log(
+        '[Debug:toolResult]',
+        `toolCallId=${toolCallId}`,
+        `incoming=${incoming.slice(0, 300)}`,
+        `data.result=${JSON.stringify(data.result).slice(0, 500)}`,
+        `dataKeys=${Object.keys(data).join(',')}`,
+      );
       const previous = turn.toolResultTextByToolCallId.get(toolCallId) ?? '';
       const isError = Boolean(data.isError);
       const finalContent = incoming.trim() ? incoming : previous;
@@ -3247,6 +3337,21 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
     }
     const turn = sessionId ? this.activeTurns.get(sessionId) : undefined;
 
+    // Collect media URLs from tool results (e.g. image_generate)
+    if (turn) {
+      if (Array.isArray(dataField.mediaUrls)) {
+        for (const url of dataField.mediaUrls) {
+          if (typeof url === 'string' && url.trim() && !turn.pendingMediaUrls.includes(url.trim())) {
+            turn.pendingMediaUrls.push(url.trim());
+          }
+        }
+      }
+      // Log once per event to diagnose whether mediaUrls is being sent
+      if (dataField.mediaUrls !== undefined) {
+        console.log('[Debug:agentStream] mediaUrls found:', JSON.stringify(dataField.mediaUrls));
+      }
+    }
+
     if (!text || !turn || !sessionId) {
       if (text) {
         console.debug(
@@ -3478,6 +3583,36 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
     const finalSegmentText = this.resolveAssistantSegmentText(turn, finalText);
     turn.currentAssistantSegmentText = finalSegmentText;
 
+    // Collect media URLs: the agent tool event does not carry the result text,
+    // so fetch MEDIA: tokens from chat.history when the turn had tool calls.
+    if ((!turn.pendingMediaUrls || turn.pendingMediaUrls.length === 0)
+        && turn.toolUseMessageIdByToolCallId.size > 0
+        && turn.sessionKey
+        && this.gatewayClient) {
+      try {
+        const history = await this.gatewayClient.request<{ messages?: unknown[] }>('chat.history', {
+          sessionKey: turn.sessionKey,
+          limit: 10,
+        }, { timeoutMs: 5_000 });
+        if (Array.isArray(history?.messages)) {
+          const mediaFromHistory: string[] = [];
+          for (const msg of history.messages) {
+            if (!isRecord(msg)) continue;
+            const text = extractMessageText(msg);
+            if (text) {
+              mediaFromHistory.push(...extractMediaTokenPaths(text));
+            }
+          }
+          if (mediaFromHistory.length > 0) {
+            turn.pendingMediaUrls = [...new Set(mediaFromHistory)];
+            console.log('[Debug:mediaFromHistory]', `sessionId=${sessionId}`, `found=${turn.pendingMediaUrls.length}`, `urls=${JSON.stringify(turn.pendingMediaUrls)}`);
+          }
+        }
+      } catch (err) {
+        console.warn('[OpenClawRuntime] media history fetch failed:', err);
+      }
+    }
+
     if (turn.assistantMessageId) {
       // Flush any pending throttled updates so store content is current.
       this.flushPendingStoreUpdate(sessionId, turn.assistantMessageId);
@@ -3489,6 +3624,7 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
         turn.hasSeenAgentAssistantStream,
       );
       if (persistedSegmentText) {
+        const withMedia = appendMediaMarkdown(persistedSegmentText, turn.pendingMediaUrls);
         console.debug(
           '[OpenClawRuntime] persisting assistant segment at chat.final',
           `sessionId=${sessionId}`,
@@ -3498,33 +3634,37 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
           `finalLen=${finalSegmentText.length}`,
           `persistedLen=${persistedSegmentText.length}`,
           `hadAgentStreamAuthority=${turn.hasSeenAgentAssistantStream}`,
+          `pendingMediaUrls=${turn.pendingMediaUrls.length}`,
         );
         this.store.updateMessage(sessionId, turn.assistantMessageId, {
-          content: persistedSegmentText,
+          content: withMedia,
           metadata: {
             isStreaming: false,
             isFinal: true,
           },
         });
-        this.emit('messageUpdate', sessionId, turn.assistantMessageId, persistedSegmentText);
+        this.emit('messageUpdate', sessionId, turn.assistantMessageId, withMedia);
       }
-    } else if (finalSegmentText) {
-      const reusedMessageId = this.reuseFinalAssistantMessage(sessionId, finalSegmentText);
-      if (reusedMessageId) {
-        turn.assistantMessageId = reusedMessageId;
-      } else {
-        const msgTimestamp = isRecord(payload.message) && typeof (payload.message as Record<string, unknown>).timestamp === 'number'
-          ? (payload.message as Record<string, unknown>).timestamp as number : undefined;
-        const assistantMessage = this.store.addMessage(sessionId, {
-          type: 'assistant',
-          content: finalSegmentText,
-          metadata: {
-            isStreaming: false,
-            isFinal: true,
-          },
-        }, msgTimestamp);
-        turn.assistantMessageId = assistantMessage.id;
-        this.emit('message', sessionId, assistantMessage);
+    } else if (finalSegmentText || (turn.pendingMediaUrls && turn.pendingMediaUrls.length > 0)) {
+      const contentWithMedia = appendMediaMarkdown(finalSegmentText, turn.pendingMediaUrls);
+      if (contentWithMedia) {
+        const reusedMessageId = this.reuseFinalAssistantMessage(sessionId, contentWithMedia);
+        if (reusedMessageId) {
+          turn.assistantMessageId = reusedMessageId;
+        } else {
+          const msgTimestamp = isRecord(payload.message) && typeof (payload.message as Record<string, unknown>).timestamp === 'number'
+            ? (payload.message as Record<string, unknown>).timestamp as number : undefined;
+          const assistantMessage = this.store.addMessage(sessionId, {
+            type: 'assistant',
+            content: contentWithMedia,
+            metadata: {
+              isStreaming: false,
+              isFinal: true,
+            },
+          }, msgTimestamp);
+          turn.assistantMessageId = assistantMessage.id;
+          this.emit('message', sessionId, assistantMessage);
+        }
       }
     }
 
@@ -4965,6 +5105,7 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
       pendingUserSync: !!isChannel,
       bufferedChatPayloads: [],
       bufferedAgentPayloads: [],
+      pendingMediaUrls: [],
     });
     if (runId) {
       this.sessionIdByRunId.set(runId, sessionId);
