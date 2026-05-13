@@ -14,7 +14,7 @@ interface ContextUsageIndicatorProps {
   active?: boolean;
 }
 
-const RADIUS = 8;
+const RADIUS = 7;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 const formatTooltip = (usage: CoworkContextUsage | undefined, showActionHint: boolean): string => {
@@ -73,30 +73,32 @@ const ContextUsageIndicator: React.FC<ContextUsageIndicatorProps> = ({
         }`}
       >
         <svg
-          viewBox="0 0 24 24"
+          viewBox="0 0 20 20"
           className={`h-5 w-5 text-secondary ${compacting ? 'animate-spin' : ''}`}
+          shapeRendering="geometricPrecision"
           aria-hidden="true"
         >
           <circle
-            cx="12"
-            cy="12"
+            cx="10"
+            cy="10"
             r={RADIUS}
             fill="none"
             stroke="currentColor"
-            strokeWidth="2.4"
-            opacity="0.22"
+            strokeWidth="2"
+            opacity="0.42"
           />
           <circle
-            cx="12"
-            cy="12"
+            cx="10"
+            cy="10"
             r={RADIUS}
             fill="none"
             stroke="currentColor"
-            strokeWidth="2.4"
+            strokeWidth="2"
+            opacity="1"
             strokeLinecap="round"
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={offset}
-            transform="rotate(-90 12 12)"
+            transform="rotate(-90 10 10)"
           />
         </svg>
       </button>
