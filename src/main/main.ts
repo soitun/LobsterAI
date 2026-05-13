@@ -1169,6 +1169,7 @@ const getOpenClawConfigSync = (): OpenClawConfigSync => {
       },
       getMcpBridgeSecret: () => mcpBridgeSecret,
       getAgents: () => getCoworkStore().listAgents(),
+      getUserPlugins: () => getCoworkStore().listUserPlugins().map(p => ({ pluginId: p.pluginId, enabled: p.enabled, config: p.config })),
     });
   }
   return openClawConfigSync;
@@ -3905,6 +3906,93 @@ if (!gotTheLock) {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to set config',
       };
+    }
+  });
+
+  // ==================== Plugin Management IPC Handlers ====================
+
+  ipcMain.handle('plugins:list', async () => {
+    try {
+      const { PluginManager } = await import('./libs/pluginManager');
+      const manager = new PluginManager(getCoworkStore());
+      return { success: true, plugins: await manager.listPlugins() };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to list plugins' };
+    }
+  });
+
+  ipcMain.handle('plugins:install', async (event, params: {
+    source: 'npm' | 'clawhub' | 'git' | 'local';
+    spec: string;
+    registry?: string;
+    version?: string;
+  }) => {
+    try {
+      const { PluginManager } = await import('./libs/pluginManager');
+      const manager = new PluginManager(getCoworkStore());
+      const sender = event.sender;
+      const sendLog = (line: string) => {
+        try { sender.send('plugins:install-log', line); } catch { /* window closed */ }
+      };
+      const result = await manager.installPlugin(params, sendLog);
+      if (result.ok) {
+        sendLog('Syncing gateway config...\n');
+        await syncOpenClawConfig({ reason: 'plugin-install' });
+        sendLog('Gateway config synced.\n');
+      }
+      return result;
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Failed to install plugin' };
+    }
+  });
+
+  ipcMain.handle('plugins:uninstall', async (_event, pluginId: string) => {
+    try {
+      const { PluginManager } = await import('./libs/pluginManager');
+      const manager = new PluginManager(getCoworkStore());
+      const result = await manager.uninstallPlugin(pluginId);
+      if (result.ok) {
+        await syncOpenClawConfig({ reason: 'plugin-uninstall' });
+      }
+      return result;
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Failed to uninstall plugin' };
+    }
+  });
+
+  ipcMain.handle('plugins:set-enabled', async (_event, pluginId: string, enabled: boolean) => {
+    try {
+      const { PluginManager } = await import('./libs/pluginManager');
+      const manager = new PluginManager(getCoworkStore());
+      manager.setPluginEnabled(pluginId, enabled);
+      await syncOpenClawConfig({ reason: 'plugin-toggle' });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Failed to toggle plugin' };
+    }
+  });
+
+  ipcMain.handle('plugins:get-config-schema', async (_event, pluginId: string) => {
+    try {
+      const { PluginManager } = await import('./libs/pluginManager');
+      const manager = new PluginManager(getCoworkStore());
+      const schema = manager.getPluginConfigSchema(pluginId);
+      const config = manager.getPluginConfig(pluginId);
+      return { success: true, schema, config };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to get config schema' };
+    }
+  });
+
+  ipcMain.handle('plugins:save-config', async (_event, pluginId: string, config: Record<string, unknown>) => {
+    try {
+      const { PluginManager } = await import('./libs/pluginManager');
+      const manager = new PluginManager(getCoworkStore());
+      manager.savePluginConfig(pluginId, config);
+      await syncOpenClawConfig({ reason: 'plugin-config' });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Failed to save plugin config' };
     }
   });
 
