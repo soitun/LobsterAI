@@ -1,4 +1,4 @@
-import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
+import { ArrowTopRightOnSquareIcon } from '@heroicons/react/20/solid';
 import React from 'react';
 import { useDispatch } from 'react-redux';
 
@@ -117,8 +117,8 @@ const ArtifactPreviewCard: React.FC<ArtifactPreviewCardProps> = ({ artifact }) =
         <div className="text-sm font-medium text-foreground truncate">{title}</div>
         <div className="text-xs text-secondary">{subtitle}</div>
       </div>
-      <div className="flex-shrink-0 flex items-center gap-1 text-primary text-sm font-medium">
-        <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+      <div className="flex-shrink-0 flex items-center gap-1 text-primary text-sm font-medium leading-none">
+        <ArrowTopRightOnSquareIcon className="w-4 h-4 shrink-0" />
         <span>{t('artifactOpen')}</span>
       </div>
     </button>
