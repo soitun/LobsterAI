@@ -47,7 +47,7 @@ const gwDiagTs = (): string => {
   const abs = Math.abs(tz);
   return `[GW-RESTART-DIAG] ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}${sign}${p(Math.floor(abs / 60))}:${p(abs % 60)}`;
 };
-import { findThirdPartyExtensionsDir, hasBundledOpenClawExtension, resolveOpenClawExtensionPluginId } from './openclawLocalExtensions';
+import { findBundledExtensionsDir, findThirdPartyExtensionsDir, hasBundledOpenClawExtension, resolveOpenClawExtensionPluginId } from './openclawLocalExtensions';
 import { getOpenClawTokenProxyPort } from './openclawTokenProxy';
 import { isSystemProxyEnabled } from './systemProxy';
 
@@ -1454,8 +1454,11 @@ export class OpenClawConfigSync {
                 // them with origin="config", bypassing the bundled-channel-entry
                 // contract check.  See openclaw/openclaw#60196.
                 ...((() => {
-                  const thirdPartyDir = findThirdPartyExtensionsDir();
-                  return thirdPartyDir ? { load: { paths: [thirdPartyDir] } } : {};
+                  const paths = [
+                    findBundledExtensionsDir(),
+                    findThirdPartyExtensionsDir(),
+                  ].filter((p): p is string => p !== null);
+                  return paths.length > 0 ? { load: { paths } } : {};
                 })()),
                 // Deny list cleared — unused bundled plugins are physically removed
                 // from dist/extensions/ at build time (see prune-openclaw-runtime.cjs).
