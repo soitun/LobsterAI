@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { getScheduledReminderDisplayText } from '../../../scheduledTask/reminderText';
-import { getArtifactTypeFromExtension, normalizeFilePathForDedup, parseFileLinksFromMessage, parseFilePathsFromText, parseMediaTokensFromText, parseToolArtifact, stripFileLinksFromText } from '../../services/artifactParser';
+import { normalizeFilePathForDedup, parseFileLinksFromMessage, parseFilePathsFromText, parseMediaTokensFromText, parseToolArtifact, stripFileLinksFromText } from '../../services/artifactParser';
 import { coworkService } from '../../services/cowork';
 import { i18nService } from '../../services/i18n';
 import { RootState } from '../../store';
@@ -1694,6 +1694,8 @@ export const AssistantTurnBlock: React.FC<{
   );
 };
 
+const EMPTY_ARTIFACTS: Artifact[] = [];
+
 const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   onManageSkills,
   onContinue,
@@ -1839,7 +1841,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   const previousArtifactPanelOpenRef = useRef(isPanelOpen);
   const contentRowRef = useRef<HTMLDivElement>(null);
   const sessionArtifacts = useSelector((state: RootState) =>
-    sessionId ? selectSessionArtifacts(state, sessionId) : []
+    sessionId ? selectSessionArtifacts(state, sessionId) : EMPTY_ARTIFACTS
   );
 
   const loadedFileIdsRef = useRef<Set<string>>(new Set());
@@ -2127,66 +2129,6 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- mid-turn artifact detection for backfilled tool results
   }, [sessionId, messagesLength, isStreaming, dispatch]);
-
-  // Intercept clicks on artifact-compatible file links → open in panel
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || !sessionId) return;
-
-    const handleLinkClick = (e: MouseEvent) => {
-      const anchor = (e.target as HTMLElement).closest('a');
-      if (!anchor) return;
-
-      const href = anchor.getAttribute('href') || '';
-      if (!href.startsWith('file://')) return;
-
-      let filePath: string;
-      try {
-        filePath = decodeURIComponent(href.replace(/^file:\/\//, ''));
-      } catch {
-        filePath = href.replace(/^file:\/\//, '');
-      }
-      // Strip leading / before Windows drive letter
-      if (/^\/[A-Za-z]:/.test(filePath)) {
-        filePath = filePath.slice(1);
-      }
-
-      const lastDot = filePath.lastIndexOf('.');
-      if (lastDot === -1) return;
-      const ext = filePath.slice(lastDot).toLowerCase();
-      if (!getArtifactTypeFromExtension(ext)) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      const normalizedClick = normalizeFilePathForDedup(filePath);
-      const existing = sessionArtifacts.find(a => a.filePath && normalizeFilePathForDedup(a.filePath) === normalizedClick);
-      if (existing) {
-        dispatch(selectArtifact(existing.id));
-      } else {
-        const type = getArtifactTypeFromExtension(ext)!;
-        const fileName = filePath.slice(Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\')) + 1);
-        const newArtifact: Artifact = {
-          id: `artifact-click-${Date.now()}`,
-          messageId: '',
-          sessionId,
-          type,
-          title: fileName,
-          content: '',
-          fileName,
-          filePath,
-          createdAt: Date.now(),
-        };
-        dispatch(addArtifact({ sessionId, artifact: newArtifact }));
-        dispatch(selectArtifact(newArtifact.id));
-      }
-    };
-
-    container.addEventListener('click', handleLinkClick, true);
-    return () => container.removeEventListener('click', handleLinkClick, true);
-  }, [sessionId, sessionArtifacts, dispatch]);
-  // ─── End artifact detection ─────────────────────────────────────────
-
   // Cleanup nav timers on unmount
   useEffect(() => {
     return () => {

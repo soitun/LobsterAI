@@ -415,6 +415,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.on('artifact:file:changed', handler);
       return () => { ipcRenderer.removeListener('artifact:file:changed', handler); };
     },
+    createPreviewSession: (filePath: string) => ipcRenderer.invoke('artifact:createPreviewSession', filePath),
+    destroyPreviewSession: (sessionId: string) => ipcRenderer.invoke('artifact:destroyPreviewSession', sessionId),
   },
   autoLaunch: {
     get: () => ipcRenderer.invoke('app:getAutoLaunch'),
