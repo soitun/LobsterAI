@@ -238,6 +238,8 @@ async function getApps_windows(ext: string): Promise<AppInfo[]> {
   if (!ext.startsWith('.')) ext = '.' + ext;
 
   const psScript = `
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $ext = "${ext}"
 $apps = @{}
 
@@ -318,7 +320,7 @@ foreach ($entry in $apps.Keys) {
     $displayName = [System.IO.Path]::GetFileNameWithoutExtension($exePath)
   }
 
-  if ($exePath) {
+  if ($exePath -and (Test-Path $exePath)) {
     $result += @{ name = $displayName; path = $exePath; isDefault = ($progId -eq $defaultProgId -or $entry -eq $defaultProgId) }
   }
 }
