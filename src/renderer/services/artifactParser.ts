@@ -115,6 +115,60 @@ export function parseCodeBlockArtifacts(
   return artifacts;
 }
 
+export const MEDIA_TOKEN_RE = /\bMEDIA:\s*`?([^\s`\n]+)`?/gi;
+
+export function parseMediaTokensFromText(
+  messageContent: string,
+  messageId: string,
+  sessionId: string,
+): Artifact[] {
+  if (!messageContent) return [];
+
+  const artifacts: Artifact[] = [];
+  const re = new RegExp(MEDIA_TOKEN_RE.source, 'gi');
+  let match: RegExpExecArray | null;
+  let index = 0;
+
+  while ((match = re.exec(messageContent)) !== null) {
+    let filePath = match[1].trim();
+    if (!filePath) continue;
+
+    if (filePath.startsWith('file:///')) {
+      filePath = filePath.slice(7);
+    } else if (filePath.startsWith('file://')) {
+      filePath = filePath.slice(7);
+    }
+
+    // Strip leading / before Windows drive letter (e.g. /D:/path from file:///D:/path)
+    if (/^\/[A-Za-z]:/.test(filePath)) {
+      filePath = filePath.slice(1);
+    }
+
+    const ext = getFileExtension(filePath);
+    const artifactType = getArtifactTypeFromExtension(ext);
+    if (!artifactType) continue;
+
+    const fileName = getFileName(filePath);
+
+    artifacts.push({
+      id: `artifact-media-${messageId}-${index}`,
+      messageId,
+      sessionId,
+      type: artifactType,
+      title: fileName,
+      content: '',
+      fileName,
+      filePath,
+      source: 'tool',
+      createdAt: Date.now(),
+    });
+
+    index++;
+  }
+
+  return artifacts;
+}
+
 const FILE_LINK_RE = /\[([^\]]+)\]\(file:\/\/([^)]+)\)/g;
 
 export function stripFileLinksFromText(text: string): string {
