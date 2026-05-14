@@ -1941,6 +1941,94 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- uses messagesLength as stable proxy for currentSession.messages
   }, [sessionId, messagesLength, isStreaming, dispatch]);
 
+  // Mid-turn artifact detection: detect MEDIA/file artifacts from backfilled tool results
+  // while still streaming. The main effect above skips when isStreaming=true, but incremental
+  // backfill can populate tool_result text mid-turn. This effect handles that case.
+  useEffect(() => {
+    if (!sessionId || !isStreaming || !currentSession?.messages?.length) return;
+
+    try {
+      const messages = currentSession.messages;
+      const cwd = currentSession.cwd;
+      const toLoad: Artifact[] = [];
+      const seenFilePaths = new Set<string>();
+
+      for (const msg of messages) {
+        if (msg.type !== 'tool_result' || !msg.content || !msg.metadata?.isFinal) continue;
+        if (loadedFileIdsRef.current.has(msg.id)) continue;
+
+        const mediaArtifacts = parseMediaTokensFromText(msg.content, msg.id, sessionId);
+        for (const ma of mediaArtifacts) {
+          const normalized = ma.filePath ? normalizeFilePathForDedup(ma.filePath) : '';
+          if (ma.filePath && !seenFilePaths.has(normalized) && !loadedFileIdsRef.current.has(ma.id)) {
+            seenFilePaths.add(normalized);
+            toLoad.push(ma);
+          }
+        }
+
+        const pathArtifacts = parseFilePathsFromText(msg.content, msg.id, sessionId);
+        for (const pa of pathArtifacts) {
+          const normalized = pa.filePath ? normalizeFilePathForDedup(pa.filePath) : '';
+          if (pa.filePath && !seenFilePaths.has(normalized) && !loadedFileIdsRef.current.has(pa.id)) {
+            seenFilePaths.add(normalized);
+            toLoad.push(pa);
+          }
+        }
+      }
+
+      if (toLoad.length === 0) return;
+
+      const loadFiles = async () => {
+        for (const artifact of toLoad) {
+          if (loadedFileIdsRef.current.has(artifact.id)) continue;
+          let rawPath = artifact.filePath!;
+          if (rawPath.startsWith('file:///')) {
+            rawPath = rawPath.slice(7);
+          } else if (rawPath.startsWith('file://')) {
+            rawPath = rawPath.slice(7);
+          } else if (rawPath.startsWith('file:/')) {
+            rawPath = rawPath.slice(5);
+          }
+          if (/^\/[A-Za-z]:/.test(rawPath)) {
+            rawPath = rawPath.slice(1);
+          }
+          const absPath = rawPath.startsWith('/')
+            ? rawPath
+            : (/^[A-Za-z]:/.test(rawPath) ? rawPath : `${cwd}/${rawPath}`);
+          try {
+            const result = await window.electron.dialog.readFileAsDataUrl(absPath);
+            if (result?.success && result.dataUrl) {
+              const isTextType = artifact.type !== 'image' && artifact.type !== 'document';
+              let content = result.dataUrl;
+              if (isTextType) {
+                try {
+                  const base64 = result.dataUrl.split(',')[1] || '';
+                  const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                  content = new TextDecoder('utf-8').decode(bytes);
+                } catch {
+                  content = result.dataUrl;
+                }
+              }
+              loadedFileIdsRef.current.add(artifact.id);
+              dispatch(addArtifact({
+                sessionId,
+                artifact: { ...artifact, content, filePath: absPath },
+              }));
+            } else {
+              loadedFileIdsRef.current.add(artifact.id);
+            }
+          } catch {
+            loadedFileIdsRef.current.add(artifact.id);
+          }
+        }
+      };
+      loadFiles();
+    } catch (err) {
+      console.error('[ArtifactDetection:midTurn] failed:', err);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mid-turn artifact detection for backfilled tool results
+  }, [sessionId, messagesLength, isStreaming, dispatch]);
+
   // Intercept clicks on artifact-compatible file links → open in panel
   useEffect(() => {
     const container = scrollContainerRef.current;
