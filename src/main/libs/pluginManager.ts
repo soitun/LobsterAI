@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 
 import type { CoworkStore, PluginSource } from '../coworkStore';
+import { getElectronNodeRuntimePath } from './coworkUtil';
 import { findThirdPartyExtensionsDir } from './openclawLocalExtensions';
 
 export interface PluginInstallParams {
@@ -126,6 +127,42 @@ function runAsync(
       reject(err);
     });
   });
+}
+
+/**
+ * Resolve the bundled npm-cli.js path so we don't depend on npm being in PATH.
+ * On macOS, Electron apps launched from Dock/Launchpad have a minimal PATH that
+ * typically doesn't include nvm/homebrew/volta-managed npm installations.
+ */
+function resolveNpmCliJs(): string | null {
+  const candidates = app.isPackaged
+    ? [path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'npm', 'bin', 'npm-cli.js')]
+    : [
+        path.join(app.getAppPath(), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+        path.join(process.cwd(), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+      ];
+  return candidates.find(c => fs.existsSync(c)) || null;
+}
+
+/** Resolve npm command and base args, preferring the bundled npm-cli.js. */
+function resolveNpmCommand(): { command: string; baseArgs: string[]; env: NodeJS.ProcessEnv; shell: boolean } {
+  const npmCliJs = resolveNpmCliJs();
+  if (npmCliJs) {
+    return {
+      command: getElectronNodeRuntimePath(),
+      baseArgs: [npmCliJs],
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      shell: false,
+    };
+  }
+  // Fallback: rely on system npm in PATH
+  const isWin = process.platform === 'win32';
+  return {
+    command: isWin ? 'npm.cmd' : 'npm',
+    baseArgs: [],
+    env: { ...process.env },
+    shell: isWin,
+  };
 }
 
 /** Humanize a camelCase/snake_case key into a label */
@@ -399,24 +436,23 @@ export class PluginManager {
 
   private async packNpmPlugin(params: PluginInstallParams, onLog?: PluginInstallLogCallback): Promise<string> {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lobsterai-plugin-'));
-    const isWin = process.platform === 'win32';
-    const npmBin = isWin ? 'npm.cmd' : 'npm';
     const spec = params.version ? `${params.spec}@${params.version}` : params.spec;
-    const args = ['pack', spec, '--pack-destination', tmpDir];
+    const npm = resolveNpmCommand();
+    const args = [...npm.baseArgs, 'pack', spec, '--pack-destination', tmpDir];
 
     if (params.registry) {
       args.push(`--registry=${params.registry}`);
     }
 
-    const result = await runAsync(npmBin, args, {
+    const result = await runAsync(npm.command, args, {
       cwd: tmpDir,
       env: {
-        ...process.env,
+        ...npm.env,
         npm_config_prefer_offline: '',
         npm_config_prefer_online: '',
       },
       timeout: 3 * 60 * 1000,
-      shell: isWin,
+      shell: npm.shell,
       onLog,
     });
 
@@ -456,12 +492,12 @@ export class PluginManager {
     }
 
     // Pack the cloned source
-    const isWin = process.platform === 'win32';
-    const npmBin = isWin ? 'npm.cmd' : 'npm';
-    const packResult = await runAsync(npmBin, ['pack', sourceDir, '--pack-destination', tmpDir], {
+    const npm = resolveNpmCommand();
+    const packResult = await runAsync(npm.command, [...npm.baseArgs, 'pack', sourceDir, '--pack-destination', tmpDir], {
       cwd: tmpDir,
+      env: npm.env,
       timeout: 3 * 60 * 1000,
-      shell: isWin,
+      shell: npm.shell,
       onLog,
     });
 
