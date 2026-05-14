@@ -1324,6 +1324,12 @@ export class OpenClawConfigSync {
               },
             },
           } : {}),
+          heartbeat: {
+            every: '1h',
+            target: 'none',
+            lightContext: true,
+            isolatedSession: true,
+          },
         },
         ...this.buildAgentsList(primaryModel, this.engineManager.getStateDir(), availableProviders, agents),
       },
