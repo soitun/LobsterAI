@@ -53,7 +53,7 @@ export function isBinaryDocumentExtension(ext: string): boolean {
   return BINARY_DOCUMENT_EXTENSIONS.has(ext.toLowerCase());
 }
 
-export const MEDIA_TOKEN_RE = /\bMEDIA:\s*`?([^\s`\n]+)`?/gi;
+export const MEDIA_TOKEN_RE = /\bMEDIA:\s*`?([^`\n]+?)`?\s*$/gim;
 
 export function parseMediaTokensFromText(
   messageContent: string,
@@ -63,7 +63,7 @@ export function parseMediaTokensFromText(
   if (!messageContent) return [];
 
   const artifacts: Artifact[] = [];
-  const re = new RegExp(MEDIA_TOKEN_RE.source, 'gi');
+  const re = new RegExp(MEDIA_TOKEN_RE.source, 'gim');
   let match: RegExpExecArray | null;
   let index = 0;
 
