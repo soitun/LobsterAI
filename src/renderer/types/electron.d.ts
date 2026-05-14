@@ -349,9 +349,6 @@ interface IElectronAPI {
       data?: McpMarketplaceData;
       error?: string;
     }>;
-    refreshBridge: () => Promise<{ success: boolean; tools: number; error?: string }>;
-    onBridgeSyncStart: (callback: () => void) => () => void;
-    onBridgeSyncDone: (callback: (data: { tools: number; error?: string }) => void) => () => void;
   };
   agents: {
     list: () => Promise<Agent[]>;

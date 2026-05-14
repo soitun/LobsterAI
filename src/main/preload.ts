@@ -49,17 +49,6 @@ contextBridge.exposeInMainWorld('electron', {
     setEnabled: (options: { id: string; enabled: boolean }) =>
       ipcRenderer.invoke('mcp:setEnabled', options),
     fetchMarketplace: () => ipcRenderer.invoke('mcp:fetchMarketplace'),
-    refreshBridge: () => ipcRenderer.invoke('mcp:refreshBridge'),
-    onBridgeSyncStart: (callback: () => void) => {
-      const handler = () => callback();
-      ipcRenderer.on('mcp:bridge:syncStart', handler);
-      return () => ipcRenderer.removeListener('mcp:bridge:syncStart', handler);
-    },
-    onBridgeSyncDone: (callback: (data: { tools: number; error?: string }) => void) => {
-      const handler = (_event: any, data: { tools: number; error?: string }) => callback(data);
-      ipcRenderer.on('mcp:bridge:syncDone', handler);
-      return () => ipcRenderer.removeListener('mcp:bridge:syncDone', handler);
-    },
   },
   permissions: {
     checkCalendar: () => ipcRenderer.invoke('permissions:checkCalendar'),

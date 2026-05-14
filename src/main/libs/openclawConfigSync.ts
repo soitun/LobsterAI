@@ -26,7 +26,6 @@ import {
   getCoworkOpenAICompatProxyBaseURL,
   getCoworkOpenAICompatProxyToken,
 } from './coworkOpenAICompatProxy';
-import type { McpToolManifestEntry } from './mcpServerManager';
 import { readOpenAICodexAuthFile } from './openaiCodexAuth';
 import {
   buildAgentEntry,
@@ -51,11 +50,9 @@ import { findBundledExtensionsDir, findThirdPartyExtensionsDir, hasBundledOpenCl
 import { getOpenClawTokenProxyPort } from './openclawTokenProxy';
 import { isSystemProxyEnabled } from './systemProxy';
 
-export type McpBridgeConfig = {
+export type AskUserCallbackConfig = {
   callbackUrl: string;
-  askUserCallbackUrl: string;
   secret: string;
-  tools: McpToolManifestEntry[];
 };
 
 const mapExecutionModeToSandboxMode = (
@@ -205,10 +202,10 @@ const MANAGED_SKILL_ENTRY_OVERRIDES: Record<string, { enabled: boolean }> = {
   'feishu-cron-reminder': {
     enabled: false,
   },
-  // LobsterAI implements its own MCP integration. The bundled mcporter skill
-  // tries to discover MCP servers via its own CLI, finds none, and produces
-  // confusing "no MCP servers" output. Disable it so users are routed through
-  // LobsterAI's MCP layer instead.
+  // LobsterAI configures MCP servers via openclaw.json mcp.servers field.
+  // The bundled mcporter skill tries to discover MCP servers via its own CLI,
+  // finds none, and produces confusing "no MCP servers" output. Disable it so
+  // users are routed through LobsterAI's MCP layer instead.
   'mcporter': {
     enabled: false,
   },
@@ -885,36 +882,44 @@ const isBundledPluginAvailable = (pluginId: string): boolean => {
   return hasBundledOpenClawExtension(pluginId);
 };
 
-function normalizeMcpToolInputSchemaForOpenAI(schema: unknown): unknown {
-  if (Array.isArray(schema)) {
-    return schema.map(normalizeMcpToolInputSchemaForOpenAI);
-  }
-  if (!schema || typeof schema !== 'object') {
-    return schema;
-  }
-
-  const record = schema as Record<string, unknown>;
-  const normalized: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(record)) {
-    normalized[key] = normalizeMcpToolInputSchemaForOpenAI(value);
-  }
-
-  const schemaType = normalized.type;
-  const isArraySchema = schemaType === 'array'
-    || (Array.isArray(schemaType) && schemaType.includes('array'));
-  if (isArraySchema && normalized.items === undefined) {
-    normalized.items = {};
-  }
-
-  return normalized;
+export interface ResolvedMcpServer {
+  name: string;
+  transportType: 'stdio' | 'sse' | 'http';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
 }
 
-const normalizeMcpBridgeToolManifestEntry = (
-  tool: McpToolManifestEntry,
-): McpToolManifestEntry => ({
-  ...tool,
-  inputSchema: normalizeMcpToolInputSchemaForOpenAI(tool.inputSchema) as Record<string, unknown>,
-});
+function buildOpenClawMcpServers(
+  servers: ResolvedMcpServer[],
+): Record<string, Record<string, unknown>> {
+  const result: Record<string, Record<string, unknown>> = {};
+  for (const server of servers) {
+    const entry: Record<string, unknown> = {};
+    switch (server.transportType) {
+      case 'stdio':
+        if (server.command) entry.command = server.command;
+        if (server.args?.length) entry.args = server.args;
+        if (server.env && Object.keys(server.env).length > 0) entry.env = server.env;
+        break;
+      case 'sse':
+        if (server.url) entry.url = server.url;
+        if (server.headers && Object.keys(server.headers).length > 0)
+          entry.headers = server.headers;
+        break;
+      case 'http':
+        if (server.url) entry.url = server.url;
+        if (server.headers && Object.keys(server.headers).length > 0)
+          entry.headers = server.headers;
+        entry.transport = 'streamable-http';
+        break;
+    }
+    result[server.name] = entry;
+  }
+  return result;
+}
 
 export type OpenClawConfigSyncResult = {
   ok: boolean;
@@ -923,7 +928,6 @@ export type OpenClawConfigSyncResult = {
   error?: string;
   agentsMdWarning?: string;
   bindingsChanged?: boolean;
-  mcpBridgeConfigChanged?: boolean;
 };
 
 const buildStreamingModeConfig = (
@@ -949,7 +953,8 @@ type OpenClawConfigSyncDeps = {
   getNeteaseBeeChanConfig: () => NeteaseBeeChanConfig | null;
   getWeixinConfig: () => WeixinOpenClawConfig | null;
   getIMSettings?: () => IMSettings | null;
-  getMcpBridgeConfig?: () => McpBridgeConfig | null;
+  getResolvedMcpServers?: () => ResolvedMcpServer[];
+  getAskUserCallbackUrl?: () => string | null;
   getMcpBridgeSecret?: () => string;
   getSkillsList?: () => Array<{ id: string; enabled: boolean }>;
   getAgents?: () => Agent[];
@@ -973,7 +978,8 @@ export class OpenClawConfigSync {
   private readonly getNeteaseBeeChanConfig: () => NeteaseBeeChanConfig | null;
   private readonly getWeixinConfig: () => WeixinOpenClawConfig | null;
   private readonly getIMSettings?: () => IMSettings | null;
-  private readonly getMcpBridgeConfig?: () => McpBridgeConfig | null;
+  private readonly getResolvedMcpServers?: () => ResolvedMcpServer[];
+  private readonly getAskUserCallbackUrl?: () => string | null;
   private readonly getMcpBridgeSecret?: () => string;
   private readonly getSkillsList?: () => Array<{ id: string; enabled: boolean }>;
   private readonly getAgents?: () => Agent[];
@@ -998,7 +1004,8 @@ export class OpenClawConfigSync {
     this.getNeteaseBeeChanConfig = deps.getNeteaseBeeChanConfig;
     this.getWeixinConfig = deps.getWeixinConfig;
     this.getIMSettings = deps.getIMSettings;
-    this.getMcpBridgeConfig = deps.getMcpBridgeConfig;
+    this.getResolvedMcpServers = deps.getResolvedMcpServers;
+    this.getAskUserCallbackUrl = deps.getAskUserCallbackUrl;
     this.getMcpBridgeSecret = deps.getMcpBridgeSecret;
     this.getSkillsList = deps.getSkillsList;
     this.getAgents = deps.getAgents;
@@ -1199,7 +1206,6 @@ export class OpenClawConfigSync {
     const hasPreinstalledPlugin = (...ids: string[]) => (
       preinstalledPlugins.some((plugin) => pluginMatches(plugin, ...ids))
     );
-    const hasMcpBridgePlugin = isBundledPluginAvailable('mcp-bridge');
     const hasAskUserPlugin = isBundledPluginAvailable('ask-user-question');
     const qwenPortalAuthPluginId = resolveOpenClawExtensionPluginId('qwen-portal-auth');
 
@@ -1423,7 +1429,6 @@ export class OpenClawConfigSync {
           ...(hasPreinstalledPlugin('feishu-openclaw-plugin')
             ? { feishu: { enabled: false } }
             : {}),
-          ...(hasMcpBridgePlugin ? { 'mcp-bridge': { enabled: true } } : {}),
           ...(hasAskUserPlugin ? { 'ask-user-question': { enabled: true } } : {}),
           // Some OpenClaw versions auto-inject qwen-portal-auth for
           // Qwen/DashScope URLs. Declare it only when the plugin actually
@@ -1472,36 +1477,25 @@ export class OpenClawConfigSync {
       })())
     };
 
-    // Sync MCP Bridge config into the plugin's own config section
-    // (root-level keys are rejected by OpenClaw's strict schema validation)
-    const mcpBridgeCfg = this.getMcpBridgeConfig?.();
-    console.log(`[OpenClawConfigSync] getMcpBridgeConfig: callbackUrl=${mcpBridgeCfg?.callbackUrl ?? 'null'}, tools=${mcpBridgeCfg?.tools?.length ?? 0}`);
-    if (
-      hasMcpBridgePlugin &&
-      mcpBridgeCfg &&
-      mcpBridgeCfg.tools.length > 0 &&
-      managedConfig.plugins
-    ) {
-      const plugins = managedConfig.plugins as Record<string, unknown>;
-      const entries = plugins.entries as Record<string, Record<string, unknown>>;
-      entries['mcp-bridge'] = {
-        ...entries['mcp-bridge'],
-        config: {
-          callbackUrl: mcpBridgeCfg.callbackUrl,
-          secret: '${LOBSTER_MCP_BRIDGE_SECRET}',
-          tools: mcpBridgeCfg.tools.map(normalizeMcpBridgeToolManifestEntry),
-        },
+    // Sync MCP servers into OpenClaw's native mcp.servers config field.
+    // OpenClaw handles connection, tool discovery, and execution natively.
+    const resolvedMcpServers = this.getResolvedMcpServers?.() ?? [];
+    if (resolvedMcpServers.length > 0) {
+      (managedConfig as Record<string, unknown>).mcp = {
+        servers: buildOpenClawMcpServers(resolvedMcpServers),
       };
     }
+    console.log(`[OpenClawConfigSync] mcp.servers: ${resolvedMcpServers.length} server(s)`);
 
-    // Sync AskUserQuestion plugin config — uses the same HTTP callback server
-    if (hasAskUserPlugin && mcpBridgeCfg && managedConfig.plugins) {
+    // Sync AskUserQuestion plugin config
+    const askUserCallbackUrl = this.getAskUserCallbackUrl?.();
+    if (hasAskUserPlugin && askUserCallbackUrl && managedConfig.plugins) {
       const plugins = managedConfig.plugins as Record<string, unknown>;
       const entries = plugins.entries as Record<string, Record<string, unknown>>;
       entries['ask-user-question'] = {
         enabled: true,
         config: {
-          callbackUrl: mcpBridgeCfg.askUserCallbackUrl,
+          callbackUrl: askUserCallbackUrl,
           secret: '${LOBSTER_MCP_BRIDGE_SECRET}',
         },
       };
@@ -2034,31 +2028,6 @@ export class OpenClawConfigSync {
       }
     })();
 
-    // Detect mcp-bridge config changes (callbackUrl, tools) separately.
-    // Even when the overall plugins section appears "UNCHANGED" in the
-    // diagnostic, the mcp-bridge sub-config may have changed — and that
-    // requires a hard gateway restart because the gateway pins its config
-    // snapshot at startup.
-    let mcpBridgeConfigChanged = false;
-    try {
-      const currentObj = currentContent ? JSON.parse(currentContent) : {};
-      const nextObj = JSON.parse(nextContent);
-      const curMcpBridge = currentObj?.plugins?.entries?.['mcp-bridge'];
-      const nxtMcpBridge = nextObj?.plugins?.entries?.['mcp-bridge'];
-      const curCallbackUrl = curMcpBridge?.config?.callbackUrl;
-      const nxtCallbackUrl = nxtMcpBridge?.config?.callbackUrl;
-      const curTools = curMcpBridge?.config?.tools;
-      const nxtTools = nxtMcpBridge?.config?.tools;
-      const curToolsJson = JSON.stringify(Array.isArray(curTools) ? curTools : []);
-      const nxtToolsJson = JSON.stringify(Array.isArray(nxtTools) ? nxtTools : []);
-      const curToolCount = Array.isArray(curTools) ? curTools.length : 0;
-      const nxtToolCount = Array.isArray(nxtTools) ? nxtTools.length : 0;
-      mcpBridgeConfigChanged = curCallbackUrl !== nxtCallbackUrl || curToolsJson !== nxtToolsJson;
-      if (mcpBridgeConfigChanged) {
-        console.log(`${gwDiagTs()} mcp-bridge config CHANGED: callbackUrl ${curCallbackUrl ?? 'null'} → ${nxtCallbackUrl ?? 'null'}, tools ${curToolCount} → ${nxtToolCount}`);
-      }
-    } catch { /* ignore parse errors */ }
-
     if (configChanged) {
       // Diagnostic: diff gateway and plugins sections to identify what triggers OpenClaw restart
       try {
@@ -2126,7 +2095,6 @@ export class OpenClawConfigSync {
       changed: configChanged || sessionStoreChanged,
       configPath,
       ...(bindingsChanged ? { bindingsChanged } : {}),
-      ...(mcpBridgeConfigChanged ? { mcpBridgeConfigChanged } : {}),
       ...(agentsMdWarning ? { agentsMdWarning } : {}),
     };
   }
@@ -2157,11 +2125,8 @@ export class OpenClawConfigSync {
 
     // MCP Bridge Secret — always set so stale openclaw.json with
     // ${LOBSTER_MCP_BRIDGE_SECRET} placeholder doesn't crash the gateway.
-    // Prefer getMcpBridgeSecret() which is available immediately (eagerly
-    // generated at module load), over getMcpBridgeConfig() which requires
-    // the full McpBridgeServer to be started.
-    const mcpBridgeCfg = this.getMcpBridgeConfig?.();
-    env.LOBSTER_MCP_BRIDGE_SECRET = this.getMcpBridgeSecret?.() || mcpBridgeCfg?.secret || 'unconfigured';
+    // Used by the ask-user-question plugin.
+    env.LOBSTER_MCP_BRIDGE_SECRET = this.getMcpBridgeSecret?.() || 'unconfigured';
 
     // Telegram — per-instance secrets (must match sync() indexing: enabled instances only)
     const tgInstances = this.getTelegramInstances();
