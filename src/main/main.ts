@@ -1378,6 +1378,43 @@ const bindCoworkRuntimeForwarder = (): void => {
     });
   });
 
+  runtime.on('sessionStatus', (sessionId: string, status: string) => {
+    const windows = BrowserWindow.getAllWindows();
+    windows.forEach((win) => {
+      if (win.isDestroyed()) return;
+      try {
+        win.webContents.send('cowork:stream:sessionStatus', { sessionId, status });
+      } catch (error) {
+        console.error('[CoworkRuntime] failed to forward session status:', error);
+      }
+    });
+  });
+
+  runtime.on('contextUsageUpdate', (sessionId: string, usage: unknown) => {
+    const windows = BrowserWindow.getAllWindows();
+    windows.forEach((win) => {
+      if (win.isDestroyed()) return;
+      try {
+        win.webContents.send('cowork:stream:contextUsage', { sessionId, usage });
+      } catch (error) {
+        console.error('[CoworkRuntime] failed to forward context usage:', error);
+      }
+    });
+  });
+
+  runtime.on('contextMaintenance', (sessionId: string, active: boolean) => {
+    const windows = BrowserWindow.getAllWindows();
+    console.log(`[CoworkRuntime] forwarding context maintenance ${active ? 'start' : 'end'} for session ${sessionId} to ${windows.length} windows.`);
+    windows.forEach((win) => {
+      if (win.isDestroyed()) return;
+      try {
+        win.webContents.send('cowork:stream:contextMaintenance', { sessionId, active });
+      } catch (error) {
+        console.error('[CoworkRuntime] failed to forward context maintenance status:', error);
+      }
+    });
+  });
+
   runtime.on('permissionRequest', (sessionId: string, request: unknown) => {
     if (runtime.getSessionConfirmationMode(sessionId) === 'text') {
       return;
@@ -3202,6 +3239,31 @@ if (!gotTheLock) {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to get session messages',
+      };
+    }
+  });
+
+  ipcMain.handle('cowork:session:contextUsage', async (_event, sessionId: string) => {
+    try {
+      const usage = await getCoworkEngineRouter().getContextUsage(sessionId);
+      return { success: true, usage };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get context usage',
+      };
+    }
+  });
+
+  ipcMain.handle('cowork:session:compactContext', async (_event, sessionId: string) => {
+    try {
+      const result = await getCoworkEngineRouter().compactContext(sessionId);
+      return { success: true, ...result };
+    } catch (error) {
+      console.warn(`[CoworkIPC] manual context compaction failed for session ${sessionId}:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to compact context',
       };
     }
   });
@@ -5155,7 +5217,7 @@ if (!gotTheLock) {
   );
 
   // Read a local file as a data URL (data:<mime>;base64,...)
-  const MAX_READ_AS_DATA_URL_BYTES = 20 * 1024 * 1024;
+  const MAX_READ_AS_DATA_URL_BYTES = 100 * 1024 * 1024;
   const MIME_BY_EXT: Record<string, string> = {
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
@@ -5279,6 +5341,26 @@ if (!gotTheLock) {
       const tmpFile = path.join(tmpDir, `preview-${Date.now()}.html`);
       fs.writeFileSync(tmpFile, htmlContent, 'utf-8');
       await shell.openPath(tmpFile);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('shell:getAppsForFile', async (_event, filePath: string) => {
+    try {
+      const { getAppsForFile } = await import('./shellApps');
+      const apps = await getAppsForFile(filePath);
+      return { success: true, apps };
+    } catch (error) {
+      return { success: false, apps: [], error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('shell:openPathWithApp', async (_event, filePath: string, appPath: string) => {
+    try {
+      const { openFileWithApp } = await import('./shellApps');
+      await openFileWithApp(filePath, appPath);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

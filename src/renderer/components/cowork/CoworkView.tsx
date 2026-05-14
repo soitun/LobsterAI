@@ -317,9 +317,9 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
   };
 
   const handleContinueSession = async (prompt: string, skillPrompt?: string, imageAttachments?: CoworkImageAttachment[]) => {
-    if (!currentSession) return;
+    if (!currentSession) return false;
     // Prevent duplicate submissions
-    if (isContinuingRef.current) return;
+    if (isContinuingRef.current) return false;
     if (openClawStatus && !isOpenClawReadyForSession(openClawStatus)) {
       window.dispatchEvent(new CustomEvent('app:showToast', { detail: i18nService.t('coworkErrorEngineNotReady') }));
       return false;
@@ -337,22 +337,21 @@ const CoworkView: React.FC<CoworkViewProps> = ({ onRequestAppSettings, onShowSki
       // Capture active skill IDs before clearing
       const sessionSkillIds = [...activeSkillIds];
 
-      // Clear active skills after capturing so they don't persist to next message
-      if (sessionSkillIds.length > 0) {
-        dispatch(clearActiveSkills());
-      }
-
       // Only send a continuation system prompt when this turn selects new skills.
       // Otherwise the main process falls back to the session prompt created on the first turn.
       const combinedSystemPrompt = buildCoworkContinuationSystemPrompt(skillPrompt, config.systemPrompt);
 
-      await coworkService.continueSession({
+      const sent = await coworkService.continueSession({
         sessionId: currentSession.id,
         prompt,
         systemPrompt: combinedSystemPrompt,
         activeSkillIds: sessionSkillIds.length > 0 ? sessionSkillIds : undefined,
         imageAttachments,
       });
+      if (sent && sessionSkillIds.length > 0) {
+        dispatch(clearActiveSkills());
+      }
+      return sent;
     } finally {
       isContinuingRef.current = false;
     }

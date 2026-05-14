@@ -166,6 +166,7 @@ interface CoworkPromptInputProps {
   contextAgentId?: string;
   onManageSkills?: () => void;
   sessionId?: string;
+  contextUsageControl?: React.ReactNode;
   /** When true, hides attachment/skill buttons but keeps the input box visible (disabled) */
   remoteManaged?: boolean;
 }
@@ -189,6 +190,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
       contextAgentId,
       onManageSkills,
       sessionId,
+      contextUsageControl,
       remoteManaged = false,
     } = props;
     const dispatch = useDispatch();
@@ -424,7 +426,13 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
     }
 
     const trimmedValue = value.trim();
-    if ((!trimmedValue && attachments.length === 0) || isStreaming || disabled || isPatchingModel) return;
+    if (isStreaming) {
+      window.dispatchEvent(new CustomEvent('app:showToast', {
+        detail: i18nService.t('coworkSessionStillRunning'),
+      }));
+      return;
+    }
+    if ((!trimmedValue && attachments.length === 0) || disabled || isPatchingModel) return;
     setShowFolderRequiredWarning(false);
 
     // Get active skills prompts and combine them
@@ -563,7 +571,12 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
         break;
     }
 
-    if (isSendCombo && !isStreaming && !disabled && !isPatchingModel) {
+    if (isSendCombo && isStreaming) {
+      event.preventDefault();
+      window.dispatchEvent(new CustomEvent('app:showToast', {
+        detail: i18nService.t('coworkSessionStillRunning'),
+      }));
+    } else if (isSendCombo && !disabled && !isPatchingModel) {
       event.preventDefault();
       handleSubmit();
     } else {
@@ -997,6 +1010,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
               if (currentAgent && agentModelIsInvalid) {
                 void agentService.updateAgent(currentAgent.id, { model: modelRef });
               }
+              void coworkService.refreshContextUsage(sessionId, { notifyCompaction: false });
             } catch {
               if (requestId === modelPatchRequestIdRef.current) {
                 dispatch(updateCurrentSessionModelOverride({
@@ -1193,6 +1207,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
                     {largeInputActions}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {contextUsageControl}
                     {largeModelSelector}
                     {largeSendButton}
                   </div>
@@ -1340,6 +1355,7 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
                   {largeInputActions}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {contextUsageControl}
                   {largeModelSelector}
                   {largeSendButton}
                 </div>
@@ -1376,29 +1392,35 @@ const CoworkPromptInput = React.forwardRef<CoworkPromptInputRef, CoworkPromptInp
             )}
 
             {isStreaming ? (
-              <button
-                type="button"
-                onClick={handleStopClick}
-                className="flex-shrink-0 p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-all shadow-subtle hover:shadow-card active:scale-95"
-                aria-label="Stop"
-              >
-                <StopIcon className="h-4 w-4" />
-              </button>
+              <div className="flex flex-shrink-0 items-center gap-3">
+                {contextUsageControl}
+                <button
+                  type="button"
+                  onClick={handleStopClick}
+                  className="p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-all shadow-subtle hover:shadow-card active:scale-95"
+                  aria-label="Stop"
+                >
+                  <StopIcon className="h-4 w-4" />
+                </button>
+              </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full transition-all ${
-                  canSubmit
-                    ? 'bg-neutral-950 text-white shadow-subtle hover:bg-neutral-800 active:scale-95 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200'
-                    : 'cursor-not-allowed bg-neutral-300 text-white dark:bg-neutral-700 dark:text-neutral-500'
-                }`}
-                aria-label={i18nService.t('sendMessage')}
-                title={sendButtonTitle}
-              >
-                <ArrowUpIcon className="h-[17px] w-[17px]" />
-              </button>
+              <div className="flex flex-shrink-0 items-center gap-3">
+                {contextUsageControl}
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full transition-all ${
+                    canSubmit
+                      ? 'bg-neutral-950 text-white shadow-subtle hover:bg-neutral-800 active:scale-95 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200'
+                      : 'cursor-not-allowed bg-neutral-300 text-white dark:bg-neutral-700 dark:text-neutral-500'
+                  }`}
+                  aria-label={i18nService.t('sendMessage')}
+                  title={sendButtonTitle}
+                >
+                  <ArrowUpIcon className="h-[17px] w-[17px]" />
+                </button>
+              </div>
             )}
           </>
         )}
