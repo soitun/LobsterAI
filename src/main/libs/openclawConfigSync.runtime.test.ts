@@ -50,6 +50,7 @@ vi.mock('./claudeSettings', () => ({
 }));
 
 vi.mock('./openclawLocalExtensions', () => ({
+  findBundledExtensionsDir: () => null,
   findThirdPartyExtensionsDir: () => null,
   hasBundledOpenClawExtension: (id: string) => id !== 'qwen-portal-auth',
   resolveOpenClawExtensionPluginId: (id: string) => {
