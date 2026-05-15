@@ -7,13 +7,14 @@ import {
   type AppUpdateCheckResult,
   type AppUpdateInfo,
   AppUpdateIpc,
-  AppUpdateSource,
   type AppUpdateRuntimeState,
+  AppUpdateSource,
   AppUpdateStatus,
 } from '../../shared/appUpdate/constants';
 import type { SqliteStore } from '../sqliteStore';
 import { cancelActiveDownload, downloadUpdate, installUpdate } from './appUpdateInstaller';
 import { getFallbackDownloadUrl, getManualUpdateCheckUrl, getUpdateCheckUrl } from './endpoints';
+import { getKeyfromAttribution } from './keyfromAttribution';
 
 type ChangeLogLang = {
   title?: string;
@@ -555,6 +556,9 @@ export class AppUpdateCoordinator {
     if (version) {
       params.append('version', version);
     }
+    const { firstKeyfrom, latestKeyfrom } = getKeyfromAttribution(this.store);
+    params.set('firstKeyfrom', firstKeyfrom);
+    params.set('latestKeyfrom', latestKeyfrom);
     return params.toString();
   }
 
