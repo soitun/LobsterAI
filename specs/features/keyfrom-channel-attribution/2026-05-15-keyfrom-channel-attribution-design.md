@@ -128,14 +128,15 @@ type KeyfromAttribution = {
 
 来源优先级：
 
-1. 开发或打包时注入的环境变量 `KEYFROM`。
-2. 构建期注入到应用代码或资源文件中的渠道值。
+1. 开发模式运行时注入的环境变量 `KEYFROM`。
+2. 生产包构建期固化到应用资源文件中的渠道值。
 3. 默认渠道 `official`。
 
 说明：
 
 - 开发模式可以直接读取 `process.env.KEYFROM`。
 - 生产包不能依赖用户运行环境中的 `KEYFROM`，需要在构建阶段把渠道值固化到应用内。
+- 生产包运行时不读取当前工作目录下的 `.keyfrom-build`，避免被外部 cwd 或本机残留文件影响。
 - 如果后续支持更多构建系统，应保持对外入口仍是 `KEYFROM`。
 
 ### FR-3: 渠道值校验与归一化
@@ -183,6 +184,31 @@ saveKeyfromAttribution({
 - `latestKeyfrom` 每次启动都更新。
 - 写入应幂等，多次启动同一渠道不会产生异常。
 - SQLite 写入失败时记录 error，但不阻塞应用主流程。
+
+默认包示例：
+
+- 如果打包时没有传 `KEYFROM`，构建期渠道为 `official`。
+- 如果用户首次启动的是默认包，SQLite 中保存：
+
+```json
+{
+  "firstKeyfrom": "official",
+  "latestKeyfrom": "official",
+  "updatedAt": 1789473600000
+}
+```
+
+- 如果同一台机器后续启动 `bilibili` 渠道包，则更新为：
+
+```json
+{
+  "firstKeyfrom": "official",
+  "latestKeyfrom": "bilibili",
+  "updatedAt": 1789473600000
+}
+```
+
+说明：`firstKeyfrom` 表示第一次来源，不覆盖；`latestKeyfrom` 表示最近一次包来源，会更新。
 
 ### FR-5: 存储位置
 
@@ -254,6 +280,7 @@ KEYFROM=bilibili npm run dist:win
 - 当前项目的 `dist:mac:x64`、`dist:mac:arm64`、`dist:win` 内部都会执行 `npm run build` 或等价构建流程，因此可以通过 `prebuild` 自动生成渠道固化文件。
 - 生产包运行时不应依赖用户机器上的 `KEYFROM` 环境变量，避免被本机环境意外覆盖；正式包应读取构建期固化到 `resources/keyfrom/keyfrom.json` 的值。
 - 如果没有传 `KEYFROM`，构建期固化为默认渠道 `official`。
+- `.keyfrom-build/` 是打包前的临时中间目录，不是运行期业务数据目录，也不应提交到 Git。
 
 ### FR-8: 渠道包产物命名
 
@@ -438,6 +465,17 @@ KEYFROM=bilibili npm run dist:win
 - 脚本输出 `.keyfrom-build/keyfrom.json`。
 - `electron-builder` 将 `.keyfrom-build/keyfrom.json` 打进安装包资源目录。
 - App 正式运行时读取安装包资源目录中的渠道文件。
+- `.keyfrom-build/keyfrom.json` 的典型内容：
+
+```json
+{
+  "keyfrom": "bilibili",
+  "generatedAt": "2026-05-15T08:04:48.717Z"
+}
+```
+
+- 如果打包时没有传 `KEYFROM`，脚本输出 `keyfrom: "official"`。
+- 生产包不直接读取用户机器上的 `process.env.KEYFROM`，也不读取当前工作目录下的 `.keyfrom-build`。
 
 ### 4.5 产物命名
 
@@ -463,19 +501,21 @@ KEYFROM=bilibili npm run dist:win
 
 ## 5. 边界情况
 
-| 场景                             | 处理方式                                                 |
-| -------------------------------- | -------------------------------------------------------- |
-| 未传 `KEYFROM`                   | 使用 `official`                                          |
-| `KEYFROM` 为空字符串             | 使用 `official`                                          |
-| `KEYFROM` 包含路径符号或特殊字符 | 回退 `official` 并记录 warning                           |
-| 本地已有 `firstKeyfrom`          | 不覆盖                                                   |
-| 本地没有 `firstKeyfrom`          | 写入当前归一化后的渠道                                   |
-| 当前包渠道变化                   | 只更新 `latestKeyfrom`                                   |
-| SQLite 读取失败                  | 记录 error，使用当前渠道作为内存兜底，不阻塞启动         |
-| SQLite 写入失败                  | 记录 error，不阻塞启动                                   |
-| 旧版本没有归因 kv                | 启动时自动按当前渠道初始化                               |
-| 用户复制安装包给他人             | 新设备首次启动按该包渠道初始化，属于渠道包归因的正常限制 |
-| 开发者想测试首次归因覆盖         | 需要先清理本地 kv 或 userData                            |
+| 场景                                 | 处理方式                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------- |
+| 开发启动未传 `KEYFROM`               | 使用 `official`                                                                       |
+| 打包时未传 `KEYFROM`                 | 构建期固化 `official`，首次启动写入 `firstKeyfrom=official`、`latestKeyfrom=official` |
+| `KEYFROM` 为空字符串                 | 使用 `official`                                                                       |
+| `KEYFROM` 包含路径符号或特殊字符     | 回退 `official` 并记录 warning                                                        |
+| 本地已有 `firstKeyfrom`              | 不覆盖                                                                                |
+| 本地没有 `firstKeyfrom`              | 写入当前归一化后的渠道                                                                |
+| 当前包渠道变化                       | 只更新 `latestKeyfrom`                                                                |
+| 生产包所在 cwd 存在 `.keyfrom-build` | 忽略该目录，只读取安装包资源目录中的 `resources/keyfrom/keyfrom.json`                 |
+| SQLite 读取失败                      | 记录 error，使用当前渠道作为内存兜底，不阻塞启动                                      |
+| SQLite 写入失败                      | 记录 error，不阻塞启动                                                                |
+| 旧版本没有归因 kv                    | 启动时自动按当前渠道初始化                                                            |
+| 用户复制安装包给他人                 | 新设备首次启动按该包渠道初始化，属于渠道包归因的正常限制                              |
+| 开发者想测试首次归因覆盖             | 需要先清理本地 kv 或 userData                                                         |
 
 ## 6. 涉及文件
 
@@ -505,13 +545,15 @@ KEYFROM=bilibili npm run dist:win
 
 ## 7. 验收标准
 
-1. `KEYFROM=bilibili npm run electron:dev` 首次启动后，本地归因为 `firstKeyfrom=bilibili`、`latestKeyfrom=bilibili`。
-2. 不清理本地数据，再运行 `KEYFROM=partner_a npm run electron:dev` 后，`firstKeyfrom` 仍为 `bilibili`，`latestKeyfrom` 为 `partner_a`。
-3. 清理归因 kv 后，再运行 `KEYFROM=partner_a npm run electron:dev`，`firstKeyfrom` 变为 `partner_a`。
+1. `KEYFROM=bilibili npm run electron:dev:openclaw` 首次启动后，本地归因为 `firstKeyfrom=bilibili`、`latestKeyfrom=bilibili`。
+2. 不清理本地数据，再运行 `KEYFROM=partner_a npm run electron:dev:openclaw` 后，`firstKeyfrom` 仍为 `bilibili`，`latestKeyfrom` 为 `partner_a`。
+3. 清理归因 kv 后，再运行 `KEYFROM=partner_a npm run electron:dev:openclaw`，`firstKeyfrom` 变为 `partner_a`。
 4. 未传 `KEYFROM` 时，当前渠道为 `official`。
-5. 非法 `KEYFROM` 不会写入本地，归因回退为 `official`。
-6. 应用重启后可以从 SQLite 读取已保存的归因结果。
-7. 单元测试覆盖 `normalizeKeyfrom()`、首次写入、不覆盖 `firstKeyfrom`、更新 `latestKeyfrom`、非法值回退。
-8. 新增 IPC channel、kv key、默认渠道等字符串均通过集中常量定义。
-9. 主进程日志符合 `[Keyfrom]` tag 和英文日志要求。
-10. 本阶段没有修改登录、支付或 API 请求携带逻辑。
+5. 未传 `KEYFROM` 打包出的默认包首次启动后，SQLite 中保存 `firstKeyfrom=official`、`latestKeyfrom=official`。
+6. 非法 `KEYFROM` 不会写入本地，归因回退为 `official`。
+7. 应用重启后可以从 SQLite 读取已保存的归因结果。
+8. 生产包运行时读取安装包资源目录中的 `resources/keyfrom/keyfrom.json`，不依赖用户机器运行时环境变量。
+9. 单元测试覆盖 `normalizeKeyfrom()`、首次写入、不覆盖 `firstKeyfrom`、更新 `latestKeyfrom`、非法值回退。
+10. 新增 IPC channel、kv key、默认渠道等字符串均通过集中常量定义。
+11. 主进程日志符合 `[Keyfrom]` tag 和英文日志要求。
+12. 本阶段没有修改登录、支付或 API 请求携带逻辑。

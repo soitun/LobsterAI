@@ -33,7 +33,11 @@ function readJsonFile<T>(filePath: string): T | null {
   }
 }
 
-function resolveBuildInfoPaths(): string[] {
+function shouldUseDevelopmentKeyfromSources(env: NodeJS.ProcessEnv): boolean {
+  return env.NODE_ENV === 'development' || !!env.ELECTRON_START_URL;
+}
+
+function resolveBuildInfoPaths(env: NodeJS.ProcessEnv): string[] {
   const resourcePath = process.resourcesPath
     ? path.join(
         process.resourcesPath,
@@ -41,18 +45,16 @@ function resolveBuildInfoPaths(): string[] {
         KeyfromBuildResource.Filename,
       )
     : '';
-  const devPath = path.join(process.cwd(), '.keyfrom-build', KeyfromBuildResource.Filename);
+  const devPath = shouldUseDevelopmentKeyfromSources(env)
+    ? path.join(process.cwd(), '.keyfrom-build', KeyfromBuildResource.Filename)
+    : '';
   const paths = [resourcePath, devPath].filter(Boolean);
   return Array.from(new Set(paths));
 }
 
-function shouldUseEnvironmentKeyfrom(env: NodeJS.ProcessEnv): boolean {
-  return env.NODE_ENV === 'development' || !!env.ELECTRON_START_URL;
-}
-
 export function resolveCurrentKeyfrom(env: NodeJS.ProcessEnv = process.env): string {
   const rawEnvKeyfrom = env[KeyfromEnv.Keyfrom];
-  if (rawEnvKeyfrom !== undefined && shouldUseEnvironmentKeyfrom(env)) {
+  if (rawEnvKeyfrom !== undefined && shouldUseDevelopmentKeyfromSources(env)) {
     const normalized = normalizeKeyfrom(rawEnvKeyfrom);
     if (
       normalized === DefaultKeyfrom.Official &&
@@ -63,7 +65,7 @@ export function resolveCurrentKeyfrom(env: NodeJS.ProcessEnv = process.env): str
     return normalized;
   }
 
-  for (const filePath of resolveBuildInfoPaths()) {
+  for (const filePath of resolveBuildInfoPaths(env)) {
     const buildInfo = readJsonFile<KeyfromBuildInfo>(filePath);
     if (!buildInfo) continue;
     const normalized = normalizeKeyfrom(buildInfo.keyfrom);
