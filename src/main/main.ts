@@ -56,7 +56,7 @@ import { generateSessionTitle, getElectronNodeRuntimePath, probeCoworkModelReadi
 import { getServerApiBaseUrl, getSkillStoreUrl, refreshEndpointsTestMode } from './libs/endpoints';
 import { mergeEnterpriseOpenclawConfig, resolveEnterpriseConfigPath, syncEnterpriseConfig } from './libs/enterpriseConfigSync';
 import { createOfficePreviewSession, createPreviewSession, destroyPreviewSession, isPreviewServerUrl, stopHtmlPreviewServer } from './libs/htmlPreviewServer';
-import { initializeKeyfromAttribution } from './libs/keyfromAttribution';
+import { getKeyfromAttribution, initializeKeyfromAttribution } from './libs/keyfromAttribution';
 import { exportLogsZip } from './libs/logExport';
 import { McpBridgeServer } from './libs/mcpBridgeServer';
 import { parsePrimaryModelRef, resolveQualifiedAgentModelRef } from './libs/openclawAgentModels';
@@ -2294,6 +2294,24 @@ if (!gotTheLock) {
     getStore().delete('auth_tokens');
   };
 
+  const buildKeyfromPayload = (): { firstKeyfrom: string; latestKeyfrom: string } => {
+    const { firstKeyfrom, latestKeyfrom } = getKeyfromAttribution(getStore());
+    return { firstKeyfrom, latestKeyfrom };
+  };
+
+  const withKeyfromBody = <T extends Record<string, unknown>>(body: T): T & { firstKeyfrom: string; latestKeyfrom: string } => ({
+    ...body,
+    ...buildKeyfromPayload(),
+  });
+
+  const appendKeyfromQuery = (url: string): string => {
+    const parsed = new URL(url);
+    const { firstKeyfrom, latestKeyfrom } = buildKeyfromPayload();
+    parsed.searchParams.set('firstKeyfrom', firstKeyfrom);
+    parsed.searchParams.set('latestKeyfrom', latestKeyfrom);
+    return parsed.toString();
+  };
+
   /**
    * Helper: Fetch with Bearer token, auto-refresh on 401 and retry once.
    */
@@ -2314,7 +2332,7 @@ if (!gotTheLock) {
       const refreshResp = await net.fetch(`${serverBaseUrl}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+        body: JSON.stringify(withKeyfromBody({ refreshToken: tokens.refreshToken })),
       });
       if (refreshResp.ok) {
         const refreshBody = await refreshResp.json() as { code: number; data: { accessToken: string; refreshToken?: string } };
@@ -2387,7 +2405,7 @@ if (!gotTheLock) {
       const resp = await net.fetch(`${serverBaseUrl}/api/auth/exchange`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authCode: code }),
+        body: JSON.stringify(withKeyfromBody({ authCode: code })),
       });
       if (!resp.ok) {
         return { success: false, error: `Exchange failed: ${resp.status}` };
@@ -2460,7 +2478,7 @@ if (!gotTheLock) {
       const tokens = getAuthTokens();
       if (!tokens) return { success: false };
       const serverBaseUrl = getServerApiBaseUrl();
-      const resp = await fetchWithAuth(`${serverBaseUrl}/api/user/profile-summary`);
+      const resp = await fetchWithAuth(appendKeyfromQuery(`${serverBaseUrl}/api/user/profile-summary`));
       if (!resp.ok) return { success: false };
       const body = await resp.json() as { code: number; data: Record<string, unknown> };
       if (body.code !== 0 || !body.data) return { success: false };
@@ -2477,7 +2495,8 @@ if (!gotTheLock) {
         const serverBaseUrl = getServerApiBaseUrl();
         await net.fetch(`${serverBaseUrl}/api/auth/logout`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${tokens.accessToken}` },
+          headers: { Authorization: `Bearer ${tokens.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(withKeyfromBody({})),
         }).catch(() => { /* best-effort */ });
       }
       clearAuthTokens();
@@ -2498,7 +2517,7 @@ if (!gotTheLock) {
       const resp = await net.fetch(`${serverBaseUrl}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+        body: JSON.stringify(withKeyfromBody({ refreshToken: tokens.refreshToken })),
       });
       if (!resp.ok) return { success: false };
       const body = await resp.json() as { code: number; data: { accessToken: string; refreshToken?: string } };
@@ -2523,7 +2542,7 @@ if (!gotTheLock) {
         return { success: false };
       }
       const serverBaseUrl = getServerApiBaseUrl();
-      const url = `${serverBaseUrl}/api/models/available`;
+      const url = appendKeyfromQuery(`${serverBaseUrl}/api/models/available`);
       console.log('[Auth:getModels] Fetching:', url);
       const resp = await fetchWithAuth(url);
       console.log('[Auth:getModels] Response status:', resp.status);
@@ -6225,7 +6244,7 @@ end tell'`, { timeout: 5000 });
           const resp = await net.fetch(`${serverBaseUrl}/api/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+            body: JSON.stringify(withKeyfromBody({ refreshToken: tokens.refreshToken })),
           });
           if (resp.ok) {
             const body = await resp.json() as { code: number; data: { accessToken: string; refreshToken?: string } };
@@ -6287,7 +6306,7 @@ end tell'`, { timeout: 5000 });
         const resp = await net.fetch(`${serverBaseUrl}/api/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+          body: JSON.stringify(withKeyfromBody({ refreshToken: tokens.refreshToken })),
         });
         if (resp.ok) {
           const body = await resp.json() as { code: number; data: { accessToken: string; refreshToken?: string } };
