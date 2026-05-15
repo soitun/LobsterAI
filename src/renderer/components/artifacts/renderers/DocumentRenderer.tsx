@@ -740,12 +740,14 @@ const LegacyPptxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) =
   const { data, loading, error: loadError } = useFileContent(artifact);
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const previewerRef = useRef<{ slideCount?: number; destroy?: () => void } | null>(null);
+  const mainPreviewerRef = useRef<{ slideCount?: number; destroy?: () => void } | null>(null);
+  const thumbnailPreviewerRef = useRef<{ slideCount?: number; destroy?: () => void } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
   const [slideCount, setSlideCount] = useState(0);
 
   const PPTX_RENDER_WIDTH = 600;
+  const PPTX_THUMBNAIL_WIDTH = 150;
 
   useEffect(() => {
     if (loadError) { setError(loadError); return; }
@@ -764,8 +766,10 @@ const LegacyPptxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) =
         const fixedData = await fixPptxData(data);
         if (cancelled) return;
 
-        previewerRef.current?.destroy?.();
-        previewerRef.current = null;
+        mainPreviewerRef.current?.destroy?.();
+        thumbnailPreviewerRef.current?.destroy?.();
+        mainPreviewerRef.current = null;
+        thumbnailPreviewerRef.current = null;
         setRendered(false);
 
         iframeDoc.open();
@@ -773,30 +777,140 @@ const LegacyPptxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) =
           * { margin: 0; padding: 0; box-sizing: border-box; }
           html, body { width: 100%; min-height: 100%; background: #f3f4f6; }
           body { padding: 16px; overflow-y: auto; }
-          #pptx-root { width: 100%; min-height: 100px; }
+          #pptx-layout { width: 100%; min-height: 100px; }
+          #pptx-thumbnails { display: none; }
+          #pptx-main { width: 100%; min-width: 0; }
           .pptx-preview-wrapper { background: transparent !important; width: 100% !important; max-width: 100% !important; height: auto !important; overflow: visible !important; }
           .pptx-preview-wrapper > div { margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); border-radius: 4px; overflow: hidden; }
           .pptx-preview-wrapper > div:last-child { margin-bottom: 0; }
           canvas { width: 100% !important; height: auto !important; display: block; }
-        </style></head><body><div id="pptx-root"></div></body></html>`);
+          @media (min-width: 760px) {
+            html, body { height: 100%; min-height: 100%; overflow: hidden; }
+            body { padding: 16px; }
+            #pptx-layout {
+              display: grid;
+              grid-template-columns: 168px minmax(0, 1fr);
+              gap: 16px;
+              height: 100%;
+              min-height: 0;
+            }
+            #pptx-thumbnails {
+              display: block;
+              min-height: 0;
+              overflow-y: auto;
+              padding: 2px 4px 2px 0;
+            }
+            #pptx-main {
+              min-height: 0;
+              overflow: auto;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 12px;
+            }
+            #pptx-main .pptx-preview-wrapper {
+              max-width: 600px !important;
+              margin: 0 auto !important;
+            }
+            #pptx-main .pptx-preview-wrapper > div {
+              display: none;
+              width: 100% !important;
+              margin: 0 !important;
+              box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+            }
+            #pptx-main .pptx-preview-wrapper > div.is-active-slide {
+              display: block;
+            }
+            #pptx-thumbnails .pptx-preview-wrapper > div {
+              position: relative;
+              width: 100% !important;
+              margin: 0 0 10px !important;
+              border: 2px solid transparent;
+              border-radius: 6px;
+              box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+              cursor: pointer;
+              opacity: 0.82;
+              transition: border-color 120ms ease, opacity 120ms ease;
+            }
+            #pptx-thumbnails .pptx-preview-wrapper > div::before {
+              content: attr(data-slide-number);
+              position: absolute;
+              left: 6px;
+              top: 5px;
+              z-index: 2;
+              min-width: 18px;
+              height: 18px;
+              border-radius: 9px;
+              background: rgba(17,24,39,0.72);
+              color: #fff;
+              font: 11px/18px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+              text-align: center;
+            }
+            #pptx-thumbnails .pptx-preview-wrapper > div.is-active-thumbnail {
+              border-color: #3b82f6;
+              opacity: 1;
+            }
+          }
+        </style></head><body><div id="pptx-layout"><aside id="pptx-thumbnails"></aside><main id="pptx-main"></main></div></body></html>`);
         iframeDoc.close();
 
-        const root = iframeDoc.getElementById('pptx-root');
-        if (!root) {
+        const mainRoot = iframeDoc.getElementById('pptx-main');
+        const thumbnailRoot = iframeDoc.getElementById('pptx-thumbnails');
+        if (!mainRoot || !thumbnailRoot) {
           setError('render_failed');
           return;
         }
 
-        const previewer = pptxPreview.init(root, { width: PPTX_RENDER_WIDTH, mode: 'list' });
-        previewerRef.current = previewer;
-        await previewer.preview(fixedData);
+        const mainPreviewer = pptxPreview.init(mainRoot, { width: PPTX_RENDER_WIDTH, mode: 'list' });
+        const thumbnailPreviewer = pptxPreview.init(thumbnailRoot, { width: PPTX_THUMBNAIL_WIDTH, mode: 'list' });
+        mainPreviewerRef.current = mainPreviewer;
+        thumbnailPreviewerRef.current = thumbnailPreviewer;
+        await mainPreviewer.preview(fixedData);
+        await thumbnailPreviewer.preview(fixedData.slice(0));
 
         if (cancelled) return;
 
-        const count = previewer.slideCount || 0;
+        const mainSlides = Array.from(mainRoot.querySelectorAll('.pptx-preview-wrapper > div'));
+        const thumbnailSlides = Array.from(thumbnailRoot.querySelectorAll('.pptx-preview-wrapper > div'));
+        const count = mainPreviewer.slideCount || mainSlides.length || thumbnailSlides.length || 0;
         setSlideCount(count);
 
         if (count > 0 && !cancelled) {
+          let selectedIndex = 0;
+          const slideLabelTemplate = t('artifactSlideLabel');
+          const setActiveSlide = (index: number) => {
+            selectedIndex = Math.max(0, Math.min(index, count - 1));
+            mainSlides.forEach((slide, slideIndex) => {
+              slide.classList.toggle('is-active-slide', slideIndex === selectedIndex);
+            });
+            thumbnailSlides.forEach((slide, slideIndex) => {
+              const isActive = slideIndex === selectedIndex;
+              slide.classList.toggle('is-active-thumbnail', isActive);
+              if (isActive) {
+                slide.scrollIntoView({ block: 'nearest' });
+              }
+            });
+          };
+
+          mainSlides.forEach((slide, index) => {
+            slide.classList.toggle('is-active-slide', index === selectedIndex);
+          });
+          thumbnailSlides.forEach((slide, index) => {
+            const slideNumber = String(index + 1);
+            slide.setAttribute('data-slide-number', slideNumber);
+            slide.setAttribute('role', 'button');
+            slide.setAttribute('tabindex', '0');
+            slide.setAttribute('aria-label', slideLabelTemplate.replace('{n}', slideNumber));
+            slide.addEventListener('click', () => setActiveSlide(index));
+            slide.addEventListener('keydown', event => {
+              const key = (event as KeyboardEvent).key;
+              if (key === 'Enter' || key === ' ') {
+                event.preventDefault();
+                setActiveSlide(index);
+              }
+            });
+            slide.classList.toggle('is-active-thumbnail', index === selectedIndex);
+          });
           setRendered(true);
         } else {
           setError('render_failed');
@@ -809,8 +923,10 @@ const LegacyPptxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) =
     render();
     return () => {
       cancelled = true;
-      previewerRef.current?.destroy?.();
-      previewerRef.current = null;
+      mainPreviewerRef.current?.destroy?.();
+      thumbnailPreviewerRef.current?.destroy?.();
+      mainPreviewerRef.current = null;
+      thumbnailPreviewerRef.current = null;
     };
   }, [data, loadError]);
 
@@ -852,7 +968,7 @@ const LegacyPptxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) =
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {slideCount > 0 && (
-        <div className="px-3 py-1.5 text-xs text-muted border-b border-border shrink-0">
+        <div className="px-4 py-1.5 text-xs text-muted border-b border-border shrink-0">
           {t('artifactSlideCount').replace('{count}', String(slideCount))}
         </div>
       )}

@@ -2830,52 +2830,58 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
 
         {/* Right side: Artifact toggle */}
         <div
-          className="non-draggable flex h-full shrink-0 items-center gap-1"
+          className={`non-draggable flex h-full shrink-0 items-center gap-1 ${
+            isArtifactPanelVisible ? '-mr-4 border-l border-border pr-4' : ''
+          }`}
           style={artifactHeaderWidth !== undefined ? { width: artifactHeaderWidth } : undefined}
         >
           {isArtifactPanelVisible && artifactTabsWithArtifacts.length > 0 && (
-            <div className="scrollbar-hidden flex h-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
-              <div className="flex h-full min-w-max items-center gap-1 px-1">
-                {artifactTabsWithArtifacts.map(({ tab, artifact }) => {
-                  const isActive = tab.id === activeArtifactPreviewTab?.id;
-                  const fileName = artifact.fileName || artifact.title;
-                  return (
-                    <div
-                      key={tab.id}
-                      className={`group flex h-7 w-[clamp(92px,24vw,190px)] items-center rounded-lg text-xs transition-colors ${
-                        isActive
-                          ? 'bg-surface-raised text-foreground shadow-sm'
-                          : 'text-secondary hover:bg-surface hover:text-foreground'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleActivateArtifactTab(tab.id)}
-                        className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-left"
-                        title={fileName}
-                      >
-                        <FileTypeIcon fileName={fileName} className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{fileName}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleCloseArtifactTab(tab.id);
-                        }}
-                        className={`mr-1 rounded p-0.5 transition-colors ${
+            <div className="relative flex h-full min-w-0 flex-1">
+              <div className="scrollbar-hidden flex h-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
+                <div className="flex h-full min-w-max items-center gap-1 pl-4 pr-3">
+                  {artifactTabsWithArtifacts.map(({ tab, artifact }) => {
+                    const isActive = tab.id === activeArtifactPreviewTab?.id;
+                    const fileName = artifact.fileName || artifact.title;
+                    return (
+                      <div
+                        key={tab.id}
+                        className={`group flex h-7 w-[clamp(92px,24vw,190px)] items-center rounded-lg text-xs transition-colors ${
                           isActive
-                            ? 'text-secondary hover:bg-surface-hover hover:text-foreground'
-                            : 'text-transparent group-hover:text-secondary group-hover:hover:bg-surface-hover group-hover:hover:text-foreground'
+                            ? 'bg-surface-raised text-foreground shadow-sm'
+                            : 'text-secondary hover:bg-surface hover:text-foreground'
                         }`}
-                        title={i18nService.t('artifactCloseTab')}
                       >
-                        <ArtifactTabCloseIcon className="h-3 w-3" />
-                      </button>
-                    </div>
-                  );
-                })}
+                        <button
+                          type="button"
+                          onClick={() => handleActivateArtifactTab(tab.id)}
+                          className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-left"
+                          title={fileName}
+                        >
+                          <FileTypeIcon fileName={fileName} className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{fileName}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleCloseArtifactTab(tab.id);
+                          }}
+                          className={`mr-1 rounded p-0.5 transition-colors ${
+                            isActive
+                              ? 'text-secondary hover:bg-surface-hover hover:text-foreground'
+                              : 'text-transparent group-hover:text-secondary group-hover:hover:bg-surface-hover group-hover:hover:text-foreground'
+                          }`}
+                          title={i18nService.t('artifactCloseTab')}
+                        >
+                          <ArtifactTabCloseIcon className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+              <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-background from-[34%] via-background/80 via-[66%] to-transparent backdrop-blur-sm [mask-image:linear-gradient(to_right,black_0%,black_40%,rgba(0,0,0,0.75)_72%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,black_0%,black_40%,rgba(0,0,0,0.75)_72%,transparent_100%)]" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-background from-[18%] via-background/80 via-[58%] to-transparent backdrop-blur-sm [mask-image:linear-gradient(to_left,black_0%,black_30%,rgba(0,0,0,0.75)_68%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_left,black_0%,black_30%,rgba(0,0,0,0.75)_68%,transparent_100%)]" />
             </div>
           )}
           {isArtifactPanelVisible && artifactTabsWithArtifacts.length === 0 && (

@@ -34,6 +34,8 @@ const NON_CODE_TYPES = new Set<ArtifactType>(['document', 'image', 'text']);
 
 const COPYABLE_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg']);
 
+const PANEL_CLOSE_DRAG_THRESHOLD = 48;
+
 function isCopyableArtifact(artifact: Artifact): boolean {
   if (artifact.type === 'document') return false;
   if (artifact.type === 'image') {
@@ -106,10 +108,13 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
   const selectedArtifact = activePreviewTab ? artifactsById.get(activePreviewTab.artifactId) ?? null : null;
   const selectedArtifactId = selectedArtifact?.id ?? null;
   const activeTab = activePreviewTab?.contentView ?? ArtifactContentView.Preview;
+  const isDocumentArtifact = selectedArtifact?.type === 'document';
 
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
+  const previousBodyCursor = useRef('');
+  const [panelIsResizing, setPanelIsResizing] = useState(false);
   const constrainedMaxPanelWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, maxPanelWidth));
   const constrainedMinPanelWidth = Math.min(
     constrainedMaxPanelWidth,
@@ -117,40 +122,55 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
   );
   const constrainedPanelWidth = Math.max(constrainedMinPanelWidth, Math.min(constrainedMaxPanelWidth, panelWidth));
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+  const handleResizeStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
     isResizing.current = true;
     startX.current = e.clientX;
     startWidth.current = constrainedPanelWidth;
+    previousBodyCursor.current = document.body.style.cursor;
+    document.body.style.cursor = 'col-resize';
     document.body.classList.add('select-none');
+    setPanelIsResizing(true);
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    const stopResizing = () => {
+      isResizing.current = false;
+      document.body.style.cursor = previousBodyCursor.current;
+      document.body.classList.remove('select-none');
+      setPanelIsResizing(false);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
       if (!isResizing.current) return;
+      moveEvent.preventDefault();
       const nextWidth = startWidth.current + startX.current - moveEvent.clientX;
-      if (nextWidth < constrainedMinPanelWidth) {
-        isResizing.current = false;
-        document.body.classList.remove('select-none');
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
+      if (nextWidth < constrainedMinPanelWidth - PANEL_CLOSE_DRAG_THRESHOLD) {
+        stopResizing();
         dispatch(closePanel());
         return;
       }
-      dispatch(setPanelWidth(Math.min(constrainedMaxPanelWidth, nextWidth)));
+      const clampedWidth = Math.max(
+        constrainedMinPanelWidth,
+        Math.min(constrainedMaxPanelWidth, nextWidth),
+      );
+      dispatch(setPanelWidth(clampedWidth));
     };
 
-    const handleMouseUp = () => {
-      isResizing.current = false;
-      document.body.classList.remove('select-none');
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+    const handlePointerUp = () => {
+      stopResizing();
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('pointercancel', handlePointerUp);
   }, [constrainedMaxPanelWidth, constrainedMinPanelWidth, constrainedPanelWidth, dispatch]);
 
   useEffect(() => {
     return () => {
+      document.body.style.cursor = previousBodyCursor.current;
       document.body.classList.remove('select-none');
     };
   }, []);
@@ -311,13 +331,17 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
     <>
       {/* Drag handle */}
       <div
-        className="w-1 shrink-0 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
-        onMouseDown={handleResizeStart}
+        className="w-1 shrink-0 touch-none cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+        onPointerDown={handleResizeStart}
       />
       <aside
         style={{ width: constrainedPanelWidth, maxWidth: constrainedMaxPanelWidth }}
         className="shrink border-l border-border bg-background flex flex-col h-full overflow-hidden relative"
       >
+        {panelIsResizing && (
+          <div className="absolute inset-0 z-30 cursor-col-resize bg-transparent" />
+        )}
+
         {/* Floating file list overlay */}
         {showFileList && (
           <div
@@ -403,10 +427,10 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
             </div>
 
             {/* Preview/Code tabs */}
-            <div className="flex border-b border-border shrink-0">
+            <div className={`flex border-b border-border shrink-0 ${isDocumentArtifact ? 'pl-4' : ''}`}>
               <button
                 onClick={() => handleSetContentView(ArtifactContentView.Preview)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
+                className={`${isDocumentArtifact ? 'px-0' : 'px-3'} py-1.5 text-xs font-medium transition-colors border-b-2 ${
                   activeTab === ArtifactContentView.Preview
                     ? 'border-primary text-primary'
                     : 'border-transparent text-secondary hover:text-foreground'
