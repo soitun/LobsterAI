@@ -21,13 +21,17 @@ import {
   selectRemoteManaged,
 } from '../../store/selectors/coworkSelectors';
 import {
+  activateArtifactPreviewTab,
   addArtifact,
+  closeArtifactPreviewTab,
   closePanel,
   MAX_PANEL_WIDTH,
   MIN_PANEL_WIDTH,
+  selectActivePreviewTab,
   selectArtifact,
   selectIsPanelOpen,
   selectPanelWidth,
+  selectPreviewTabs,
   selectSessionArtifacts,
   togglePanel,
 } from '../../store/slices/artifactSlice';
@@ -43,6 +47,7 @@ import { ArtifactPanel, ArtifactPreviewCard } from '../artifacts';
 import ComposeIcon from '../icons/ComposeIcon';
 import CopyIcon from '../icons/CopyIcon';
 import ExclamationTriangleIcon from '../icons/ExclamationTriangleIcon';
+import FileTypeIcon from '../icons/fileTypes/FileTypeIcon';
 import InformationCircleIcon from '../icons/InformationCircleIcon';
 import PuzzleIcon from '../icons/PuzzleIcon';
 import SidebarToggleIcon from '../icons/SidebarToggleIcon';
@@ -299,6 +304,12 @@ const ArtifactPanelIcon: React.FC<React.SVGProps<SVGSVGElement> & { open?: boole
     </svg>
   );
 };
+
+const ArtifactTabCloseIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" {...props}>
+    <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+  </svg>
+);
 
 class ArtifactPanelErrorBoundary extends React.Component<
   { children: React.ReactNode; onClose: () => void },
@@ -1843,6 +1854,18 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   const sessionArtifacts = useSelector((state: RootState) =>
     sessionId ? selectSessionArtifacts(state, sessionId) : EMPTY_ARTIFACTS
   );
+  const artifactPreviewTabs = useSelector((state: RootState) =>
+    sessionId ? selectPreviewTabs(state, sessionId) : []
+  );
+  const activeArtifactPreviewTab = useSelector((state: RootState) =>
+    sessionId ? selectActivePreviewTab(state, sessionId) : null
+  );
+  const artifactTabsWithArtifacts = useMemo(() => {
+    const artifactsById = new Map(sessionArtifacts.map(artifact => [artifact.id, artifact]));
+    return artifactPreviewTabs
+      .map(tab => ({ tab, artifact: artifactsById.get(tab.artifactId) }))
+      .filter((item): item is { tab: typeof artifactPreviewTabs[number]; artifact: Artifact } => Boolean(item.artifact));
+  }, [artifactPreviewTabs, sessionArtifacts]);
 
   const loadedFileIdsRef = useRef<Set<string>>(new Set());
 
@@ -1923,6 +1946,16 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
     dispatch(closePanel());
     loadedFileIdsRef.current = new Set();
   }, [sessionId, dispatch]);
+
+  const handleActivateArtifactTab = useCallback((tabId: string) => {
+    if (!sessionId) return;
+    dispatch(activateArtifactPreviewTab({ sessionId, tabId }));
+  }, [dispatch, sessionId]);
+
+  const handleCloseArtifactTab = useCallback((tabId: string) => {
+    if (!sessionId) return;
+    dispatch(closeArtifactPreviewTab({ sessionId, tabId }));
+  }, [dispatch, sessionId]);
 
   useEffect(() => {
     if (!sessionId || !currentSession?.messages?.length) return;
@@ -2684,6 +2717,9 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
   const artifactPanelFrameWidth = isArtifactPanelVisible
     ? Math.max(artifactPanelMinWidth, Math.min(panelWidth, artifactPanelMaxWidth)) + ARTIFACT_PANEL_RESIZE_HANDLE_WIDTH
     : 0;
+  const artifactHeaderWidth = isArtifactPanelVisible
+    ? Math.max(0, artifactPanelFrameWidth - ARTIFACT_PANEL_RESIZE_HANDLE_WIDTH)
+    : undefined;
   const shouldShowTurnNavigationRail = turns.length > 1 && isScrollable;
 
   const renderConversationTurns = () => {
@@ -2767,7 +2803,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
       {/* Header — spans full width */}
       <div className="draggable flex h-12 items-center justify-between px-4 border-b border-border bg-background shrink-0">
         {/* Left side: Toggle buttons (when collapsed) + Title */}
-        <div className="flex h-full items-center gap-2 min-w-0">
+        <div className="flex h-full flex-1 items-center gap-2 min-w-0">
           {isSidebarCollapsed && (
             <div className={`non-draggable flex items-center gap-1 ${isMac ? 'pl-[68px]' : ''}`}>
               <button
@@ -2793,7 +2829,63 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
         </div>
 
         {/* Right side: Artifact toggle */}
-        <div className="non-draggable flex items-center gap-1">
+        <div
+          className="non-draggable flex h-full shrink-0 items-center gap-1"
+          style={artifactHeaderWidth !== undefined ? { width: artifactHeaderWidth } : undefined}
+        >
+          {isArtifactPanelVisible && artifactTabsWithArtifacts.length > 0 && (
+            <div className="scrollbar-hidden flex h-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
+              <div className="flex h-full min-w-max items-center gap-1 px-1">
+                {artifactTabsWithArtifacts.map(({ tab, artifact }) => {
+                  const isActive = tab.id === activeArtifactPreviewTab?.id;
+                  const fileName = artifact.fileName || artifact.title;
+                  return (
+                    <div
+                      key={tab.id}
+                      className={`group flex h-7 w-[clamp(92px,24vw,190px)] items-center rounded-lg text-xs transition-colors ${
+                        isActive
+                          ? 'bg-surface-raised text-foreground shadow-sm'
+                          : 'text-secondary hover:bg-surface hover:text-foreground'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleActivateArtifactTab(tab.id)}
+                        className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-left"
+                        title={fileName}
+                      >
+                        <FileTypeIcon fileName={fileName} className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{fileName}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleCloseArtifactTab(tab.id);
+                        }}
+                        className={`mr-1 rounded p-0.5 transition-colors ${
+                          isActive
+                            ? 'text-secondary hover:bg-surface-hover hover:text-foreground'
+                            : 'text-transparent group-hover:text-secondary group-hover:hover:bg-surface-hover group-hover:hover:text-foreground'
+                        }`}
+                        title={i18nService.t('artifactCloseTab')}
+                      >
+                        <ArtifactTabCloseIcon className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {isArtifactPanelVisible && artifactTabsWithArtifacts.length === 0 && (
+            <div className="flex h-full min-w-0 flex-1 items-center px-1">
+              <div className="flex h-7 max-w-[190px] flex-1 items-center gap-1.5 rounded-lg bg-surface-raised px-2 text-xs text-foreground shadow-sm">
+                <ArtifactPanelIcon className="h-3.5 w-3.5 shrink-0" open />
+                <span className="truncate">{i18nService.t('artifactFileList')}</span>
+              </div>
+            </div>
+          )}
           {/* Artifact panel toggle */}
           <button
             type="button"
@@ -3166,6 +3258,7 @@ const CoworkSessionDetail: React.FC<CoworkSessionDetailProps> = ({
         >
           <ArtifactPanelErrorBoundary onClose={() => dispatch(closePanel())}>
             <ArtifactPanel
+              sessionId={currentSession.id}
               artifacts={sessionArtifacts}
               minPanelWidth={artifactPanelMinWidth}
               maxPanelWidth={artifactPanelMaxWidth}

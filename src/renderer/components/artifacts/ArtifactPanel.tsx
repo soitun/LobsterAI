@@ -1,19 +1,19 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { i18nService } from '@/services/i18n';
 import type { RootState } from '@/store';
 import {
   addArtifact,
+  ArtifactContentView,
   closePanel,
   MAX_PANEL_WIDTH,
   MIN_PANEL_WIDTH,
-  selectActiveTab,
-  selectArtifact,
+  openArtifactPreviewTab,
+  selectActivePreviewTab,
   selectPanelWidth,
-  selectSelectedArtifact,
-  setActiveTab,
   setPanelWidth,
+  setPreviewTabContentView,
 } from '@/store/slices/artifactSlice';
 import type { ArtifactType } from '@/types/artifact';
 import type { Artifact } from '@/types/artifact';
@@ -82,26 +82,30 @@ function escapeHtml(str: string): string {
 }
 
 interface ArtifactPanelProps {
+  sessionId: string;
   artifacts: Artifact[];
   minPanelWidth?: number;
   maxPanelWidth?: number;
 }
 
 const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
+  sessionId,
   artifacts,
   minPanelWidth = MIN_PANEL_WIDTH,
   maxPanelWidth = MAX_PANEL_WIDTH,
 }) => {
   const dispatch = useDispatch();
-  const selectedArtifact = useSelector(selectSelectedArtifact);
   const panelWidth = useSelector(selectPanelWidth);
-  const activeTab = useSelector(selectActiveTab);
-  const selectedArtifactId = useSelector((state: RootState) => state.artifact.selectedArtifactId);
+  const activePreviewTab = useSelector((state: RootState) => selectActivePreviewTab(state, sessionId));
   const [showFileList, setShowFileList] = useState(false);
   const fileListRef = useRef<HTMLDivElement>(null);
   const toggleBtnRef = useRef<HTMLButtonElement>(null);
 
   const previewableArtifacts = artifacts.filter(a => PREVIEWABLE_ARTIFACT_TYPES.has(a.type));
+  const artifactsById = useMemo(() => new Map(artifacts.map(artifact => [artifact.id, artifact])), [artifacts]);
+  const selectedArtifact = activePreviewTab ? artifactsById.get(activePreviewTab.artifactId) ?? null : null;
+  const selectedArtifactId = selectedArtifact?.id ?? null;
+  const activeTab = activePreviewTab?.contentView ?? ArtifactContentView.Preview;
 
   const isResizing = useRef(false);
   const startX = useRef(0);
@@ -188,11 +192,19 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
     };
   }, [selectedArtifact?.filePath]);
 
-  const handleClose = useCallback(() => dispatch(closePanel()), [dispatch]);
   const handleSelectArtifact = useCallback((id: string) => {
-    dispatch(selectArtifact(id));
+    dispatch(openArtifactPreviewTab({ sessionId, artifactId: id }));
     setShowFileList(false);
-  }, [dispatch]);
+  }, [dispatch, sessionId]);
+
+  const handleSetContentView = useCallback((contentView: ArtifactContentView) => {
+    if (!activePreviewTab) return;
+    dispatch(setPreviewTabContentView({
+      sessionId,
+      tabId: activePreviewTab.id,
+      contentView,
+    }));
+  }, [activePreviewTab, dispatch, sessionId]);
 
   const handleCopy = useCallback(async () => {
     if (!selectedArtifact) return;
@@ -326,9 +338,10 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
 
         {selectedArtifact ? (
           <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-            {/* Header: file list toggle + filename + type + actions */}
+            {/* Header: current file + actions */}
             <div className="h-10 flex items-center gap-2 px-3 border-b border-border shrink-0">
               <span className="text-sm font-medium truncate">{selectedArtifact.fileName || selectedArtifact.title}</span>
+              <span className="text-xs uppercase text-muted">{selectedArtifact.type}</span>
               <span className="flex-1" />
               {selectedArtifact.filePath && (
                 <button
@@ -392,9 +405,9 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
             {/* Preview/Code tabs */}
             <div className="flex border-b border-border shrink-0">
               <button
-                onClick={() => dispatch(setActiveTab('preview'))}
+                onClick={() => handleSetContentView(ArtifactContentView.Preview)}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
-                  activeTab === 'preview'
+                  activeTab === ArtifactContentView.Preview
                     ? 'border-primary text-primary'
                     : 'border-transparent text-secondary hover:text-foreground'
                 }`}
@@ -403,9 +416,9 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
               </button>
               {!NON_CODE_TYPES.has(selectedArtifact.type) && (
                 <button
-                  onClick={() => dispatch(setActiveTab('code'))}
+                  onClick={() => handleSetContentView(ArtifactContentView.Code)}
                   className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
-                    activeTab === 'code'
+                    activeTab === ArtifactContentView.Code
                       ? 'border-primary text-primary'
                       : 'border-transparent text-secondary hover:text-foreground'
                   }`}
@@ -417,7 +430,7 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
 
             {/* Render area */}
             <div className="flex-1 min-h-0 overflow-hidden">
-              {activeTab === 'preview' ? (
+              {activeTab === ArtifactContentView.Preview ? (
                 <ArtifactRenderer artifact={selectedArtifact} sessionArtifacts={artifacts} />
               ) : (
                 <CodeRenderer artifact={selectedArtifact} />
@@ -427,16 +440,6 @@ const ArtifactPanel: React.FC<ArtifactPanelProps> = ({
         ) : (
           /* No artifact selected: show full-width file list */
           <div className="flex-1 flex flex-col h-full overflow-hidden">
-            <div className="h-10 flex items-center px-3 border-b border-border shrink-0">
-              <span className="text-xs font-medium text-secondary">{t('artifactFiles')}</span>
-              <span className="flex-1" />
-              <button
-                onClick={handleClose}
-                className="p-1 rounded text-secondary hover:text-foreground hover:bg-surface transition-colors"
-              >
-                <CloseIcon />
-              </button>
-            </div>
             <FileDirectoryView
               artifacts={previewableArtifacts}
               selectedId={selectedArtifactId}
@@ -468,12 +471,6 @@ const OpenExternalIcon = () => (
     <path d="M12 9v3.5a1.5 1.5 0 01-1.5 1.5h-7A1.5 1.5 0 012 12.5v-7A1.5 1.5 0 013.5 4H7" />
     <path d="M10 2h4v4" />
     <path d="M7 9l7-7" />
-  </svg>
-);
-
-const CloseIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-    <path d="M4 4l8 8M12 4l-8 8" />
   </svg>
 );
 

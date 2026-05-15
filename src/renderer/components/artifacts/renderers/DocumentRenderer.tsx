@@ -132,7 +132,7 @@ const DocxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
     if (!wrapper || !rendered) return;
 
     const updateZoom = () => {
-      const containerWidth = wrapper.clientWidth - 48; // account for padding
+      const containerWidth = wrapper.clientWidth - 48; // account for document gutter
       if (containerWidth < DOCX_BASE_WIDTH) {
         const scale = containerWidth / DOCX_BASE_WIDTH;
         if (containerRef.current) {
@@ -169,11 +169,24 @@ const DocxSubRenderer: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
   }
 
   return (
-    <div ref={wrapperRef} className="h-full overflow-auto p-6 bg-[#f5f5f5]">
-      <div ref={containerRef} className="docx-container mx-auto" />
+    <div ref={wrapperRef} className="h-full overflow-auto bg-[#f5f5f5]">
+      <div ref={containerRef} className="docx-container" />
       <style>{`
+        .docx-container {
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          min-width: 100%;
+          padding: 24px;
+        }
         .docx-container .docx-preview-wrapper {
           background: transparent !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          width: max-content !important;
+          min-width: 100% !important;
         }
         .docx-container section.docx-preview {
           background: white !important;
