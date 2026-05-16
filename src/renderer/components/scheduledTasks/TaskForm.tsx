@@ -2,6 +2,7 @@ import { PlatformRegistry } from '@shared/platform';
 import React, { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 
+import { DeliveryMode, PayloadKind, ScheduleKind, SessionTarget, WakeMode } from '../../../scheduledTask/constants';
 import type {
   ScheduledTask,
   ScheduledTaskChannelOption,
@@ -13,7 +14,7 @@ import { i18nService } from '../../services/i18n';
 import { scheduledTaskService } from '../../services/scheduledTask';
 import { RootState } from '../../store';
 import type { Model } from '../../store/slices/modelSlice';
-import { toOpenClawModelRef } from '../../utils/openclawModelRef';
+import { resolveOpenClawModelRef, toOpenClawModelRef } from '../../utils/openclawModelRef';
 import MicrophoneIcon from '../icons/MicrophoneIcon';
 import ModelSelector from '../ModelSelector';
 import { formatScheduleLabel, type PlanType, scheduleToPlanInfo } from './utils';
@@ -154,15 +155,18 @@ function conversationOptionMatchesValue(
   return false;
 }
 
-function createFormState(task?: ScheduledTask): FormState {
-  if (!task) return { ...DEFAULT_FORM_STATE, ...nowDefaults() };
+export function createScheduledTaskFormState(task: ScheduledTask | undefined, fallbackModelRef: string): FormState {
+  if (!task) return { ...DEFAULT_FORM_STATE, ...nowDefaults(), modelId: fallbackModelRef };
 
   const planInfo = scheduleToPlanInfo(task.schedule);
   const rawCronExpr =
-    planInfo.cronExpr ?? (task.schedule.kind === 'cron' ? task.schedule.expr : '');
+    planInfo.cronExpr ?? (task.schedule.kind === ScheduleKind.Cron ? task.schedule.expr : '');
   const parsedBuilder = rawCronExpr
     ? (exprToCronBuilder(rawCronExpr) ?? { ...DEFAULT_CRON_BUILDER })
     : { ...DEFAULT_CRON_BUILDER };
+  const taskModelRef = task.payload.kind === PayloadKind.AgentTurn
+    ? (task.payload.model?.trim() || fallbackModelRef)
+    : '';
 
   return {
     name: task.name,
@@ -176,29 +180,29 @@ function createFormState(task?: ScheduledTask): FormState {
     second: planInfo.second,
     weekdays: planInfo.weekdays,
     monthDay: planInfo.monthDay,
-    payloadText: task.payload.kind === 'systemEvent' ? task.payload.text : task.payload.message,
+    payloadText: task.payload.kind === PayloadKind.SystemEvent ? task.payload.text : task.payload.message,
     notifyChannel: task.delivery.channel || 'none',
     notifyTo: task.delivery.to || '',
     cronExpr: rawCronExpr,
-    cronTz: planInfo.cronTz ?? (task.schedule.kind === 'cron' ? (task.schedule.tz ?? '') : ''),
+    cronTz: planInfo.cronTz ?? (task.schedule.kind === ScheduleKind.Cron ? (task.schedule.tz ?? '') : ''),
     cronMode: 'builder',
     cronBuilder: parsedBuilder,
     notifyAccountId: task.delivery.accountId,
-    modelId: task.payload.kind === 'agentTurn' ? (task.payload.model ?? '') : '',
+    modelId: taskModelRef,
   };
 }
 
 function buildScheduleInput(form: FormState): ScheduledTaskInput['schedule'] {
   if (form.planType === 'once') {
     const date = new Date(form.year, form.month - 1, form.day, form.hour, form.minute, form.second);
-    return { kind: 'at', at: date.toISOString() };
+    return { kind: ScheduleKind.At, at: date.toISOString() };
   }
 
   if (form.planType === 'cron') {
     const expr =
       form.cronMode === 'builder' ? cronBuilderToExpr(form.cronBuilder) : form.cronExpr.trim();
-    const schedule: ScheduledTaskInput['schedule'] & { kind: 'cron' } = {
-      kind: 'cron',
+    const schedule: ScheduledTaskInput['schedule'] & { kind: typeof ScheduleKind.Cron } = {
+      kind: ScheduleKind.Cron,
       expr,
     };
     if (form.cronTz.trim()) {
@@ -211,19 +215,19 @@ function buildScheduleInput(form: FormState): ScheduledTaskInput['schedule'] {
   const hr = String(form.hour);
 
   if (form.planType === 'hourly') {
-    return { kind: 'cron', expr: `${min} * * * *` };
+    return { kind: ScheduleKind.Cron, expr: `${min} * * * *` };
   }
 
   if (form.planType === 'daily') {
-    return { kind: 'cron', expr: `${min} ${hr} * * *` };
+    return { kind: ScheduleKind.Cron, expr: `${min} ${hr} * * *` };
   }
 
   if (form.planType === 'weekly') {
     const dowField = [...form.weekdays].sort((a, b) => a - b).join(',');
-    return { kind: 'cron', expr: `${min} ${hr} * * ${dowField}` };
+    return { kind: ScheduleKind.Cron, expr: `${min} ${hr} * * ${dowField}` };
   }
 
-  return { kind: 'cron', expr: `${min} ${hr} ${form.monthDay} * *` };
+  return { kind: ScheduleKind.Cron, expr: `${min} ${hr} ${form.monthDay} * *` };
 }
 
 const WEEKDAY_KEYS = [
@@ -245,7 +249,7 @@ function previewCron(expr: string): { ok: true; label: string } | { ok: false } 
   const parts = trimmed.split(/\s+/);
   if (parts.length !== 5) return { ok: false };
   try {
-    const label = formatScheduleLabel({ kind: 'cron', expr: trimmed });
+    const label = formatScheduleLabel({ kind: ScheduleKind.Cron, expr: trimmed });
     return { ok: true, label };
   } catch {
     return { ok: false };
@@ -253,9 +257,11 @@ function previewCron(expr: string): { ok: true; label: string } | { ok: false } 
 }
 
 const TaskForm: React.FC<TaskFormProps> = ({ mode, task, onCancel, onSaved, onDirtyChange }) => {
-  const [form, setForm] = useState<FormState>(() => createFormState(task));
-  const initialFormRef = useRef<string>(JSON.stringify(createFormState(task)));
   const availableModels = useSelector((state: RootState) => state.model.availableModels);
+  const defaultSelectedModel = useSelector((state: RootState) => state.model.defaultSelectedModel);
+  const fallbackModelRef = defaultSelectedModel ? toOpenClawModelRef(defaultSelectedModel) : '';
+  const [form, setForm] = useState<FormState>(() => createScheduledTaskFormState(task, fallbackModelRef));
+  const initialFormRef = useRef<string>(JSON.stringify(createScheduledTaskFormState(task, fallbackModelRef)));
   const [channelOptions, setChannelOptions] = useState<ScheduledTaskChannelOption[]>(() => {
     const base: ScheduledTaskChannelOption[] = [];
     const savedChannel = task?.delivery.channel;
@@ -285,12 +291,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ mode, task, onCancel, onSaved, onDi
   const isAdvanced = form.planType === 'advanced';
   const isCron = form.planType === 'cron';
   const showConversationSelector = isIMChannel(form.notifyChannel);
+  const isSystemEventTask = task?.payload.kind === PayloadKind.SystemEvent;
 
   useEffect(() => {
-    const nextForm = createFormState(task);
+    const nextForm = createScheduledTaskFormState(task, fallbackModelRef);
     initialFormRef.current = JSON.stringify(nextForm);
     setForm(nextForm);
-  }, [task]);
+  }, [task, fallbackModelRef]);
 
   useEffect(() => {
     let cancelled = false;
@@ -358,6 +365,15 @@ const TaskForm: React.FC<TaskFormProps> = ({ mode, task, onCancel, onSaved, onDi
     setForm(current => ({ ...current, ...patch }));
   };
 
+  const resolvedSelectedModelValue: Model | null = form.modelId
+    ? resolveOpenClawModelRef(form.modelId, availableModels)
+    : null;
+  const selectedModelIsInvalid = Boolean(form.modelId.trim() && !resolvedSelectedModelValue);
+  const selectedModelValue: Model | null = resolvedSelectedModelValue
+    ?? (form.modelId.trim()
+      ? { id: '__invalid__', name: form.modelId.split('/').pop() || form.modelId } as Model
+      : null);
+
   const validate = (): boolean => {
     const nextErrors: Record<string, string> = {};
 
@@ -366,6 +382,11 @@ const TaskForm: React.FC<TaskFormProps> = ({ mode, task, onCancel, onSaved, onDi
     }
     if (!form.payloadText.trim()) {
       nextErrors.payloadText = i18nService.t('scheduledTasksFormValidationPromptRequired');
+    }
+    if (!isSystemEventTask && !form.modelId.trim()) {
+      nextErrors.modelId = i18nService.t('scheduledTasksFormValidationModelRequired');
+    } else if (!isSystemEventTask && !resolvedSelectedModelValue) {
+      nextErrors.modelId = i18nService.t('scheduledTasksFormValidationModelUnavailable');
     }
 
     if (form.planType === 'once') {
@@ -419,23 +440,30 @@ const TaskForm: React.FC<TaskFormProps> = ({ mode, task, onCancel, onSaved, onDi
     try {
       const schedule = isAdvanced && task ? task.schedule : buildScheduleInput(form);
 
+      const payload: ScheduledTaskInput['payload'] = isSystemEventTask
+        ? {
+            kind: PayloadKind.SystemEvent,
+            text: form.payloadText.trim(),
+          }
+        : {
+            kind: PayloadKind.AgentTurn,
+            message: form.payloadText.trim(),
+            model: form.modelId,
+          };
+
       const input: ScheduledTaskInput = {
         name: form.name.trim(),
         description: '',
         enabled: true,
         schedule,
-        sessionTarget: 'isolated',
-        wakeMode: 'now',
-        payload: {
-          kind: 'agentTurn',
-          message: form.payloadText.trim(),
-          ...(form.modelId ? { model: form.modelId } : {}),
-        },
+        sessionTarget: SessionTarget.Isolated,
+        wakeMode: WakeMode.Now,
+        payload,
         delivery:
           form.notifyChannel === 'none'
-            ? { mode: 'none' }
+            ? { mode: DeliveryMode.None }
             : {
-                mode: 'announce',
+                mode: DeliveryMode.Announce,
                 channel: form.notifyChannel,
                 ...(form.notifyTo ? { to: form.notifyTo } : {}),
                 ...(form.notifyAccountId ? { accountId: form.notifyAccountId } : {}),
@@ -466,10 +494,6 @@ const TaskForm: React.FC<TaskFormProps> = ({ mode, task, onCancel, onSaved, onDi
   const labelClass = 'block text-[14px] font-normal leading-5 text-foreground/85 mb-1';
   const errorClass = 'text-xs text-red-500 mt-1';
   const hintClass = 'text-xs text-secondary mt-0.5';
-
-  const selectedModelValue: Model | null = form.modelId
-    ? (availableModels.find(m => toOpenClawModelRef(m) === form.modelId) ?? null)
-    : null;
 
   const handleModelChange = (model: Model | null) => {
     updateForm({ modelId: model ? toOpenClawModelRef(model) : '' });
@@ -792,8 +816,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ mode, task, onCancel, onSaved, onDi
 
   const renderScheduleRow = () => {
     if (isAdvanced) {
-      const existingExpr = task?.schedule.kind === 'cron' ? task.schedule.expr : '';
-      const existingTz = task?.schedule.kind === 'cron' ? (task.schedule.tz ?? '') : '';
+      const existingExpr = task?.schedule.kind === ScheduleKind.Cron ? task.schedule.expr : '';
+      const existingTz = task?.schedule.kind === ScheduleKind.Cron ? (task.schedule.tz ?? '') : '';
       return (
         <div>
           <label className={labelClass}>{i18nService.t('scheduledTasksFormScheduleType')}</label>
@@ -1284,13 +1308,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ mode, task, onCancel, onSaved, onDi
               style={{ minHeight: '80px', height: '120px' }}
               placeholder={i18nService.t('scheduledTasksFormPromptPlaceholder')}
             />
-            <div className="flex items-center justify-between gap-2 px-2 py-1 border-t border-border/40">
-              <ModelSelector
-                dropdownDirection="up"
-                value={selectedModelValue}
-                onChange={handleModelChange}
-                defaultLabel={i18nService.t('scheduledTasksFormModelDefault')}
-              />
+            <div className={`flex items-center gap-2 px-2 py-1 border-t border-border/40 ${isSystemEventTask ? 'justify-end' : 'justify-between'}`}>
+              {!isSystemEventTask && (
+                <ModelSelector
+                  dropdownDirection="up"
+                  value={selectedModelValue}
+                  onChange={handleModelChange}
+                />
+              )}
               <button
                 type="button"
                 onClick={() => void handleVoiceInput()}
@@ -1302,6 +1327,11 @@ const TaskForm: React.FC<TaskFormProps> = ({ mode, task, onCancel, onSaved, onDi
               </button>
             </div>
           </div>
+          {!isSystemEventTask && (errors.modelId || selectedModelIsInvalid) && (
+            <p className={errorClass}>
+              {errors.modelId || i18nService.t('scheduledTasksFormValidationModelUnavailable')}
+            </p>
+          )}
           <p className={hintClass}>
             {i18nService.t(
               'scheduledTasksFormPayloadTextAgentHint' as Parameters<typeof i18nService.t>[0],

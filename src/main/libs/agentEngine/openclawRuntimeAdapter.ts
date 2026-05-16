@@ -700,6 +700,38 @@ const extractCurrentTurnAssistantText = (messages: unknown[]): string => {
   return textParts.join('\n\n');
 };
 
+/**
+ * Extract the text of the LAST assistant message in the current turn from chat.history.
+ * Unlike extractCurrentTurnAssistantText (which concatenates ALL assistant segments),
+ * this returns only the final segment — suitable for replacing the last assistant message
+ * in managed sessions without relying on committedAssistantText for prefix slicing.
+ */
+const extractLastAssistantSegmentInTurn = (messages: unknown[]): string => {
+  let lastUserIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (isRecord(msg) && (msg as Record<string, unknown>).role === 'user') {
+      lastUserIdx = i;
+      break;
+    }
+  }
+
+  const startIdx = lastUserIdx >= 0 ? lastUserIdx + 1 : 0;
+  let lastAssistantText = '';
+  for (let i = startIdx; i < messages.length; i++) {
+    const msg = messages[i];
+    if (!isRecord(msg)) continue;
+    const role = typeof msg.role === 'string' ? msg.role.trim().toLowerCase() : '';
+    if (role !== 'assistant') continue;
+    let text = extractMessageText(msg).trim();
+    text = stripTrailingSilentReplyToken(text);
+    if (text && !shouldSuppressHeartbeatText('assistant', text)) {
+      lastAssistantText = text;
+    }
+  }
+  return lastAssistantText;
+};
+
 const isDroppedBoundaryTextBlockSubset = (streamedTextBlocks: string[], finalTextBlocks: string[]): boolean => {
   if (finalTextBlocks.length === 0 || finalTextBlocks.length >= streamedTextBlocks.length) {
     return false;
@@ -4250,9 +4282,15 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
     }
 
     // Reconcile local messages with authoritative gateway history.
-    // This replaces the old syncFinalAssistantWithHistory + syncChannelAfterTurn flow.
-    // Awaited so that IM handlers reading from the store see reconciled data.
-    await this.reconcileWithHistory(sessionId, turn.sessionKey);
+    // Managed sessions keep local tool messages as the source of truth, but the
+    // final assistant text should still be corrected from chat.history because
+    // streaming merge heuristics can lose repeated boundary characters.
+    if (isManagedSessionKey(turn.sessionKey)) {
+      await this.syncFinalAssistantWithHistory(sessionId, turn);
+    } else {
+      // Awaited so that IM handlers reading from the store see reconciled data.
+      await this.reconcileWithHistory(sessionId, turn.sessionKey);
+    }
 
     // Detect thinking-only response: the last API call returned no visible text
     // (only a thinking block), causing the run to complete silently without output.
@@ -5137,7 +5175,13 @@ export class OpenClawRuntimeAdapter extends EventEmitter implements CoworkRuntim
 
       console.log('[Debug:syncFinal] canonicalText length:', canonicalText.length, 'assistantMessageId:', turn.assistantMessageId);
 
-      const canonicalSegmentText = this.resolveAssistantSegmentText(turn, canonicalText);
+      // For managed sessions: extract the last assistant segment directly from history
+      // instead of using committedAssistantText for prefix slicing.
+      // committedAssistantText is built from streaming data which may have been corrupted
+      // by the gateway's appendUniqueSuffix overlap detection.
+      const canonicalSegmentText = isManagedSessionKey(turn.sessionKey)
+        ? extractLastAssistantSegmentInTurn(historyMessages!)
+        : this.resolveAssistantSegmentText(turn, canonicalText);
       console.debug('[Debug:syncFinal] canonicalSegmentText length:', canonicalSegmentText.length,
         'committed.length:', turn.committedAssistantText.length,
         'segment:', canonicalSegmentText.slice(0, 80));

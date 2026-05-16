@@ -563,6 +563,20 @@ type ProviderDescriptor = {
   }>;
 };
 
+const DEEPSEEK_REASONING_MODEL_IDS = new Set(['deepseek-reasoner', 'deepseek-r1']);
+const DEEPSEEK_V4_MODEL_PATTERN = /^deepseek-v4(?:[-_.]|$)/;
+
+const resolveDeepSeekModelReasoning = (modelId: string): boolean | undefined => {
+  const normalized = modelId.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  if (DEEPSEEK_REASONING_MODEL_IDS.has(normalized) || DEEPSEEK_V4_MODEL_PATTERN.test(normalized)) {
+    return true;
+  }
+  return undefined;
+};
+
 const PROVIDER_REGISTRY: Record<string, ProviderDescriptor> = {
   [ProviderName.LobsteraiServer]: {
     providerId: OpenClawProviderId.LobsteraiServer,
@@ -623,6 +637,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderDescriptor> = {
     providerId: OpenClawProviderId.DeepSeek,
     resolveApi: ({ apiType, baseURL }) => mapApiTypeToOpenClawApi(apiType, undefined, baseURL),
     normalizeBaseUrl: stripChatCompletionsSuffix,
+    resolveModelReasoning: resolveDeepSeekModelReasoning,
   },
 
   [ProviderName.Qwen]: {
@@ -665,6 +680,7 @@ const PROVIDER_REGISTRY: Record<string, ProviderDescriptor> = {
     providerId: OpenClawProviderId.Xiaomi,
     resolveApi: ({ apiType, baseURL }) => mapApiTypeToOpenClawApi(apiType, undefined, baseURL),
     normalizeBaseUrl: stripChatCompletionsSuffix,
+    resolveModelReasoning: () => true,
   },
 
   [ProviderName.OpenRouter]: {
@@ -2774,7 +2790,7 @@ export class OpenClawConfigSync {
         const identityContent = (agent.identity || '').trim();
         this.syncFileIfChanged(identityPath, identityContent ? `${identityContent}\n` : '');
 
-        // Sync USER.md — shared user profile from Settings > Personalization
+        // Sync USER.md — shared user profile from the main Agent settings
         const userPath = path.join(agentWorkspace, 'USER.md');
         this.syncFileIfChanged(userPath, userContent);
 

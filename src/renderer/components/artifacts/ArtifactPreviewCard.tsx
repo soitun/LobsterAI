@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useDispatch } from 'react-redux';
 
 import { i18nService } from '@/services/i18n';
-import { selectArtifact } from '@/store/slices/artifactSlice';
+import { openArtifactPreviewTab } from '@/store/slices/artifactSlice';
 import type { Artifact, ArtifactType } from '@/types/artifact';
 
 const t = (key: string) => i18nService.t(key);
@@ -277,7 +277,7 @@ const ArtifactPreviewCard: React.FC<ArtifactPreviewCardProps> = ({ artifact }) =
   const dropdownAnchorRef = useRef<HTMLButtonElement>(null);
 
   const handleClick = () => {
-    dispatch(selectArtifact(artifact.id));
+    dispatch(openArtifactPreviewTab({ sessionId: artifact.sessionId, artifactId: artifact.id }));
   };
 
   const IconComponent = TYPE_ICON_MAP[artifact.type];

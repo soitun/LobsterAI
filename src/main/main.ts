@@ -41,7 +41,7 @@ import {
   OpenClawRuntimeAdapter,
   type PermissionResult,
 } from './libs/agentEngine';
-import { AppUpdateCoordinator } from './libs/appUpdateCoordinator';
+import { AppUpdateCoordinator, INSTALLATION_UUID_KEY } from './libs/appUpdateCoordinator';
 import { clearServerModelMetadata, getAllServerModelMetadata, getCurrentApiConfig, resolveAllEnabledProviderConfigs, resolveCurrentApiConfig, resolveRawApiConfig, setAuthTokensGetter, setServerBaseUrlGetter, setStoreGetter, updateServerModelMetadata } from './libs/claudeSettings';
 import {
   clearCopilotTokenState,
@@ -56,6 +56,7 @@ import { generateSessionTitle, getElectronNodeRuntimePath, probeCoworkModelReadi
 import { getServerApiBaseUrl, getSkillStoreUrl, refreshEndpointsTestMode } from './libs/endpoints';
 import { mergeEnterpriseOpenclawConfig, resolveEnterpriseConfigPath, syncEnterpriseConfig } from './libs/enterpriseConfigSync';
 import { createOfficePreviewSession, createPreviewSession, destroyPreviewSession, isPreviewServerUrl, stopHtmlPreviewServer } from './libs/htmlPreviewServer';
+import { getKeyfromAttribution, initializeKeyfromAttribution } from './libs/keyfromAttribution';
 import { exportLogsZip } from './libs/logExport';
 import { McpBridgeServer } from './libs/mcpBridgeServer';
 import { parsePrimaryModelRef, resolveQualifiedAgentModelRef } from './libs/openclawAgentModels';
@@ -806,6 +807,8 @@ let coworkRuntimeForwarderBound = false;
 let memoryMigrationDone = false;
 let preventSleepBlockerId: number | null = null;
 let appUpdateCoordinator: AppUpdateCoordinator | null = null;
+
+const AUTH_USER_STORE_KEY = 'auth_user';
 
 function setPreventSleepBlockerEnabled(enabled: boolean): void {
   if (enabled) {
@@ -2293,6 +2296,79 @@ if (!gotTheLock) {
     getStore().delete('auth_tokens');
   };
 
+  const saveAuthUser = (user: Record<string, unknown>) => {
+    try {
+      getStore().set(AUTH_USER_STORE_KEY, user);
+    } catch (error) {
+      console.warn('[Auth] failed to save auth user for attribution:', error);
+    }
+  };
+
+  const getAuthUserId = (): string | null => {
+    try {
+      const user = getStore().get<Record<string, unknown>>(AUTH_USER_STORE_KEY);
+      const yid = user?.yid;
+      if (typeof yid === 'string' && yid.trim()) return yid;
+      const userId = user?.userId;
+      if (typeof userId === 'string' && userId.trim()) return userId;
+    } catch (error) {
+      console.warn('[Auth] failed to read auth user for attribution:', error);
+    }
+    return null;
+  };
+
+  const clearAuthUser = () => {
+    try {
+      getStore().delete(AUTH_USER_STORE_KEY);
+    } catch (error) {
+      console.warn('[Auth] failed to clear auth user for attribution:', error);
+    }
+  };
+
+  const getOrCreateInstallationId = (): string | null => {
+    try {
+      const existing = getStore().get<string>(INSTALLATION_UUID_KEY);
+      if (typeof existing === 'string' && existing.trim()) {
+        return existing;
+      }
+      const nextId = crypto.randomUUID();
+      getStore().set(INSTALLATION_UUID_KEY, nextId);
+      return nextId;
+    } catch (error) {
+      console.warn('[Auth] failed to get installation uuid:', error);
+      return null;
+    }
+  };
+
+  const buildKeyfromPayload = (): { firstKeyfrom: string; latestKeyfrom: string; uuid?: string; userId?: string; version: string } => {
+    const { firstKeyfrom, latestKeyfrom } = getKeyfromAttribution(getStore());
+    const uuid = getOrCreateInstallationId();
+    const userId = getAuthUserId();
+    return {
+      firstKeyfrom,
+      latestKeyfrom,
+      ...(uuid ? { uuid } : {}),
+      ...(userId ? { userId } : {}),
+      version: app.getVersion(),
+    };
+  };
+
+  const withKeyfromBody = <T extends Record<string, unknown>>(body: T) => ({
+    ...body,
+    ...buildKeyfromPayload(),
+  });
+
+  const appendKeyfromQuery = (url: string): string => {
+    const parsed = new URL(url);
+    const payload = buildKeyfromPayload();
+    for (const [key, value] of Object.entries(payload)) {
+      if (value) {
+        parsed.searchParams.set(key, String(value));
+      }
+    }
+    return parsed.toString();
+  };
+
   /**
    * Helper: Fetch with Bearer token, auto-refresh on 401 and retry once.
    */
@@ -2310,10 +2386,12 @@ if (!gotTheLock) {
 
     if (resp.status === 401 && tokens.refreshToken) {
       const serverBaseUrl = getServerApiBaseUrl();
-      const refreshResp = await net.fetch(`${serverBaseUrl}/api/auth/refresh`, {
+      const refreshUrl = `${serverBaseUrl}/api/auth/refresh`;
+      console.log(`[Auth] requesting token refresh after unauthorized response at ${refreshUrl}`);
+      const refreshResp = await net.fetch(refreshUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+        body: JSON.stringify(withKeyfromBody({ refreshToken: tokens.refreshToken })),
       });
       if (refreshResp.ok) {
         const refreshBody = await refreshResp.json() as { code: number; data: { accessToken: string; refreshToken?: string } };
@@ -2383,10 +2461,12 @@ if (!gotTheLock) {
   ipcMain.handle('auth:exchange', async (_event, { code }: { code: string }) => {
     try {
       const serverBaseUrl = getServerApiBaseUrl();
-      const resp = await net.fetch(`${serverBaseUrl}/api/auth/exchange`, {
+      const exchangeUrl = `${serverBaseUrl}/api/auth/exchange`;
+      console.log(`[Auth] requesting auth exchange at ${exchangeUrl}`);
+      const resp = await net.fetch(exchangeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authCode: code }),
+        body: JSON.stringify(withKeyfromBody({ authCode: code })),
       });
       if (!resp.ok) {
         return { success: false, error: `Exchange failed: ${resp.status}` };
@@ -2405,6 +2485,7 @@ if (!gotTheLock) {
         return { success: false, error: body.message || 'Exchange failed' };
       }
       saveAuthTokens(body.data.accessToken, body.data.refreshToken);
+      saveAuthUser(body.data.user);
       console.log('[Auth] exchange user data:', JSON.stringify(body.data.user));
       return { success: true, user: body.data.user, quota: normalizeQuota(body.data.quota) };
     } catch (error) {
@@ -2423,6 +2504,7 @@ if (!gotTheLock) {
       if (!profileResp.ok) return { success: false };
       const profileBody = await profileResp.json() as { code: number; data: Record<string, unknown> };
       if (profileBody.code !== 0 || !profileBody.data) return { success: false };
+      saveAuthUser(profileBody.data);
       // Fetch quota separately
       const quotaResp = await fetchWithAuth(`${serverBaseUrl}/api/user/quota`);
       let quota = null;
@@ -2459,7 +2541,9 @@ if (!gotTheLock) {
       const tokens = getAuthTokens();
       if (!tokens) return { success: false };
       const serverBaseUrl = getServerApiBaseUrl();
-      const resp = await fetchWithAuth(`${serverBaseUrl}/api/user/profile-summary`);
+      const profileSummaryUrl = appendKeyfromQuery(`${serverBaseUrl}/api/user/profile-summary`);
+      console.log(`[Auth] requesting profile summary at ${profileSummaryUrl}`);
+      const resp = await fetchWithAuth(profileSummaryUrl);
       if (!resp.ok) return { success: false };
       const body = await resp.json() as { code: number; data: Record<string, unknown> };
       if (body.code !== 0 || !body.data) return { success: false };
@@ -2474,16 +2558,21 @@ if (!gotTheLock) {
       const tokens = getAuthTokens();
       if (tokens) {
         const serverBaseUrl = getServerApiBaseUrl();
-        await net.fetch(`${serverBaseUrl}/api/auth/logout`, {
+        const logoutUrl = `${serverBaseUrl}/api/auth/logout`;
+        console.log(`[Auth] requesting logout at ${logoutUrl}`);
+        await net.fetch(logoutUrl, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${tokens.accessToken}` },
+          headers: { Authorization: `Bearer ${tokens.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(withKeyfromBody({})),
         }).catch(() => { /* best-effort */ });
       }
       clearAuthTokens();
+      clearAuthUser();
       clearServerModelMetadata();
       return { success: true };
     } catch {
       clearAuthTokens();
+      clearAuthUser();
       clearServerModelMetadata();
       return { success: true };
     }
@@ -2494,10 +2583,12 @@ if (!gotTheLock) {
       const tokens = getAuthTokens();
       if (!tokens?.refreshToken) return { success: false };
       const serverBaseUrl = getServerApiBaseUrl();
-      const resp = await net.fetch(`${serverBaseUrl}/api/auth/refresh`, {
+      const refreshUrl = `${serverBaseUrl}/api/auth/refresh`;
+      console.log(`[Auth] requesting manual token refresh at ${refreshUrl}`);
+      const resp = await net.fetch(refreshUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+        body: JSON.stringify(withKeyfromBody({ refreshToken: tokens.refreshToken })),
       });
       if (!resp.ok) return { success: false };
       const body = await resp.json() as { code: number; data: { accessToken: string; refreshToken?: string } };
@@ -2522,8 +2613,8 @@ if (!gotTheLock) {
         return { success: false };
       }
       const serverBaseUrl = getServerApiBaseUrl();
-      const url = `${serverBaseUrl}/api/models/available`;
-      console.log('[Auth:getModels] Fetching:', url);
+      const url = appendKeyfromQuery(`${serverBaseUrl}/api/models/available`);
+      console.log(`[Auth:getModels] requesting available models at ${url}`);
       const resp = await fetchWithAuth(url);
       console.log('[Auth:getModels] Response status:', resp.status);
       if (!resp.ok) {
@@ -6175,6 +6266,7 @@ end tell'`, { timeout: 5000 });
     store = await initStore();
     profiler.measure('initStore');
     console.log('[Main] initApp: store initialized');
+    initializeKeyfromAttribution(store);
     refreshEndpointsTestMode(store);
     sqliteBackupManager = new SqliteBackupManager(app.getPath('userData'));
 
@@ -6220,10 +6312,12 @@ end tell'`, { timeout: 5000 });
           const tokens = getAuthTokens();
           if (!tokens?.refreshToken) return null;
           const serverBaseUrl = getServerApiBaseUrl();
-          const resp = await net.fetch(`${serverBaseUrl}/api/auth/refresh`, {
+          const refreshUrl = `${serverBaseUrl}/api/auth/refresh`;
+          console.log(`[Auth] requesting token refresh (reason: ${reason}) at ${refreshUrl}`);
+          const resp = await net.fetch(refreshUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+            body: JSON.stringify(withKeyfromBody({ refreshToken: tokens.refreshToken })),
           });
           if (resp.ok) {
             const body = await resp.json() as { code: number; data: { accessToken: string; refreshToken?: string } };
@@ -6282,10 +6376,12 @@ end tell'`, { timeout: 5000 });
       if (!tokens?.refreshToken) return null;
       const serverBaseUrl = getServerApiBaseUrl();
       try {
-        const resp = await net.fetch(`${serverBaseUrl}/api/auth/refresh`, {
+        const refreshUrl = `${serverBaseUrl}/api/auth/refresh`;
+        console.log(`[Auth] requesting proxy token refresh at ${refreshUrl}`);
+        const resp = await net.fetch(refreshUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+          body: JSON.stringify(withKeyfromBody({ refreshToken: tokens.refreshToken })),
         });
         if (resp.ok) {
           const body = await resp.json() as { code: number; data: { accessToken: string; refreshToken?: string } };

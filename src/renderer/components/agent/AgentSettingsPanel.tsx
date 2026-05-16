@@ -39,6 +39,7 @@ interface AgentSettingsPanelProps {
 const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClose }) => {
   const agents = useSelector((state: RootState) => state.agent.agents);
   const availableModels = useSelector((state: RootState) => state.model.availableModels);
+  const defaultSelectedModel = useSelector((state: RootState) => state.model.defaultSelectedModel);
   const [, setAgent] = useState<Agent | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -107,7 +108,9 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
       setIdentity(nextIdentity);
       setUserInfo(nextUserInfo);
       setIcon(a.icon);
-      setModel(resolveOpenClawModelRef(a.model, availableModels) ?? null);
+      const resolvedModel = resolveOpenClawModelRef(a.model, availableModels) ?? defaultSelectedModel ?? null;
+      const resolvedModelRef = resolvedModel ? toOpenClawModelRef(resolvedModel) : '';
+      setModel(resolvedModel);
       setWorkingDirectory(a.workingDirectory ?? '');
       setSkillIds(a.skillIds ?? []);
       initialValuesRef.current = {
@@ -117,7 +120,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
         identity: nextIdentity,
         userInfo: nextUserInfo,
         icon: a.icon,
-        model: a.model ?? '',
+        model: resolvedModelRef,
         workingDirectory: a.workingDirectory ?? '',
         skillIds: a.skillIds ?? [],
       };
@@ -141,7 +144,7 @@ const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({ agentId, onClos
     return () => {
       cancelled = true;
     };
-  }, [agentId, availableModels]);
+  }, [agentId, availableModels, defaultSelectedModel]);
 
   const isDirty = useCallback((): boolean => {
     const init = initialValuesRef.current;

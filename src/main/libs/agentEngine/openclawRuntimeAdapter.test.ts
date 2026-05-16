@@ -848,6 +848,113 @@ test('lifecycle fallback repairs managed session assistant text from history', a
   expect(session.status).toBe('completed');
 });
 
+test('chat final repairs managed session assistant text from history', async () => {
+  vi.useFakeTimers();
+  try {
+    const corruptedText = 'Created file://Users/admin/report.pptx';
+    const canonicalText = 'Created file:///Users/admin/report.pptx';
+    const { session, store } = createReconcileStore([
+      { id: 'msg-1', type: 'user', content: 'create a ppt', timestamp: 1, metadata: {} },
+      { id: 'msg-2', type: 'assistant', content: corruptedText, timestamp: 2, metadata: { isStreaming: true } },
+    ]);
+
+    const adapter = new OpenClawRuntimeAdapter(store, {});
+    const sessionKey = `agent:main:lobsterai:${session.id}`;
+    adapter.gatewayClient = {
+      start: () => {},
+      stop: () => {},
+      request: async () => ({
+        messages: [
+          { role: 'user', content: 'create a ppt' },
+          { role: 'assistant', content: canonicalText },
+        ],
+      }),
+    };
+
+    const turn = createActiveTurn(session.id, sessionKey, 'run-1');
+    turn.assistantMessageId = 'msg-2';
+    turn.currentAssistantSegmentText = corruptedText;
+    turn.currentText = corruptedText;
+    turn.currentContentText = corruptedText;
+    turn.currentContentBlocks = [corruptedText];
+    adapter.activeTurns.set(session.id, turn);
+    adapter.latestTurnTokenBySession.set(session.id, turn.turnToken);
+
+    adapter.handleChatEvent({
+      state: 'final',
+      runId: 'run-1',
+      sessionKey,
+      message: { role: 'assistant', content: corruptedText },
+    }, 1);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(session.messages.find((message) => message.id === 'msg-2')?.content).toBe(canonicalText);
+
+    await vi.advanceTimersByTimeAsync(800);
+    expect(session.status).toBe('completed');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('chat final repairs last segment with corrupted committed text from tool calls', async () => {
+  vi.useFakeTimers();
+  try {
+    const committedSegment = 'I will create a file for you.';
+    const corruptedLastSegment = 'Done! Created file://Users/admin/report.pptx';
+    const canonicalLastSegment = 'Done! Created file:///Users/admin/report.pptx';
+    const { session, store } = createReconcileStore([
+      { id: 'msg-1', type: 'user', content: 'create a ppt', timestamp: 1, metadata: {} },
+      { id: 'msg-2', type: 'assistant', content: committedSegment, timestamp: 2, metadata: { isStreaming: false, isFinal: true } },
+      { id: 'msg-3', type: 'tool_use', content: 'write_file', timestamp: 3, metadata: {} },
+      { id: 'msg-4', type: 'tool_result', content: 'file created', timestamp: 4, metadata: {} },
+      { id: 'msg-5', type: 'assistant', content: corruptedLastSegment, timestamp: 5, metadata: { isStreaming: true } },
+    ]);
+
+    const adapter = new OpenClawRuntimeAdapter(store, {});
+    const sessionKey = `agent:main:lobsterai:${session.id}`;
+    adapter.gatewayClient = {
+      start: () => {},
+      stop: () => {},
+      request: async () => ({
+        messages: [
+          { role: 'user', content: 'create a ppt' },
+          { role: 'assistant', content: committedSegment },
+          { role: 'assistant', content: canonicalLastSegment },
+        ],
+      }),
+    };
+
+    const turn = createActiveTurn(session.id, sessionKey, 'run-1');
+    turn.assistantMessageId = 'msg-5';
+    turn.committedAssistantText = committedSegment;
+    turn.currentAssistantSegmentText = corruptedLastSegment;
+    turn.currentText = `${committedSegment}\n\n${corruptedLastSegment}`;
+    turn.currentContentText = `${committedSegment}\n\n${corruptedLastSegment}`;
+    turn.currentContentBlocks = [`${committedSegment}\n\n${corruptedLastSegment}`];
+    adapter.activeTurns.set(session.id, turn);
+    adapter.latestTurnTokenBySession.set(session.id, turn.turnToken);
+
+    adapter.handleChatEvent({
+      state: 'final',
+      runId: 'run-1',
+      sessionKey,
+      message: { role: 'assistant', content: `${committedSegment}\n\n${corruptedLastSegment}` },
+    }, 1);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(session.messages.find((message) => message.id === 'msg-5')?.content).toBe(canonicalLastSegment);
+    expect(session.messages.find((message) => message.id === 'msg-2')?.content).toBe(committedSegment);
+
+    await vi.advanceTimersByTimeAsync(800);
+    expect(session.status).toBe('completed');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test('late lifecycle fallback event does not reopen a completed managed session', () => {
   const { session, store } = createReconcileStore([
     { id: 'msg-1', type: 'user', content: '你是哪个模型', timestamp: 1, metadata: {} },
