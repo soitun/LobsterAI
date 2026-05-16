@@ -1,4 +1,4 @@
-import { type ApiFormat,type ProviderConfig,ProviderRegistry } from '@shared/providers';
+import { ApiFormat, type ProviderConfig, ProviderName, ProviderRegistry } from '@shared/providers';
 
 import { AppConfig, CONFIG_KEYS, defaultConfig, isCustomProvider } from '../config';
 import { localStore } from './store';
@@ -47,10 +47,10 @@ const normalizeProviderApiFormat = (providerKey: string, apiFormat: unknown): 'a
   if (fixed) {
     return fixed;
   }
-  if (apiFormat === 'openai') {
-    return 'openai';
+  if (apiFormat === ApiFormat.OpenAI) {
+    return ApiFormat.OpenAI;
   }
-  return 'anthropic';
+  return ApiFormat.Anthropic;
 };
 
 const normalizeProviderModels = (
@@ -81,6 +81,53 @@ const normalizeProvidersConfig = (providers: AppConfig['providers']): AppConfig[
       },
     ])
   ) as AppConfig['providers'];
+};
+
+const LEGACY_PROVIDER_API_FORMAT_DEFAULTS: Record<string, {
+  fromBaseUrl: string;
+  fromApiFormat: typeof ApiFormat.Anthropic;
+  toBaseUrl: string;
+  toApiFormat: typeof ApiFormat.OpenAI;
+}> = {
+  [ProviderName.DeepSeek]: {
+    fromBaseUrl: 'https://api.deepseek.com/anthropic',
+    fromApiFormat: ApiFormat.Anthropic,
+    toBaseUrl: 'https://api.deepseek.com',
+    toApiFormat: ApiFormat.OpenAI,
+  },
+  [ProviderName.Xiaomi]: {
+    fromBaseUrl: 'https://api.xiaomimimo.com/anthropic',
+    fromApiFormat: ApiFormat.Anthropic,
+    toBaseUrl: 'https://api.xiaomimimo.com/v1/chat/completions',
+    toApiFormat: ApiFormat.OpenAI,
+  },
+};
+
+const migrateProviderDefaultApiFormat = (
+  providerKey: string,
+  providerConfig: Record<string, unknown>,
+): Record<string, unknown> => {
+  const migration = LEGACY_PROVIDER_API_FORMAT_DEFAULTS[providerKey];
+  if (!migration) {
+    return providerConfig;
+  }
+
+  const normalizedBaseUrl = normalizeProviderBaseUrl(providerKey, providerConfig.baseUrl);
+  if (
+    normalizedBaseUrl !== migration.fromBaseUrl
+    || (
+      providerConfig.apiFormat !== undefined
+      && providerConfig.apiFormat !== migration.fromApiFormat
+    )
+  ) {
+    return providerConfig;
+  }
+
+  return {
+    ...providerConfig,
+    baseUrl: migration.toBaseUrl,
+    apiFormat: migration.toApiFormat,
+  };
 };
 
 /**
@@ -148,6 +195,12 @@ const ADDED_PROVIDER_MODELS: Record<string, { models: Array<{ id: string; name: 
     ],
     position: 'start',
   },
+  xiaomi: {
+    models: [
+      { id: 'mimo-v2-omni', name: 'MiMo V2 Omni', supportsImage: true },
+    ],
+    position: 'end',
+  },
 };
 
 class ConfigService {
@@ -190,13 +243,14 @@ class ConfigService {
                         : [...mergedProvider.models, ...newModels];
                     }
                   }
+                  const migratedProvider = migrateProviderDefaultApiFormat(providerKey, mergedProvider);
                   return {
-                    ...mergedProvider,
-                    baseUrl: normalizeProviderBaseUrl(providerKey, mergedProvider.baseUrl),
-                    apiFormat: normalizeProviderApiFormat(providerKey, mergedProvider.apiFormat),
+                    ...migratedProvider,
+                    baseUrl: normalizeProviderBaseUrl(providerKey, migratedProvider.baseUrl),
+                    apiFormat: normalizeProviderApiFormat(providerKey, migratedProvider.apiFormat),
                     models: normalizeProviderModels(
                       providerKey,
-                      mergedProvider.models as ProviderConfig['models'],
+                      migratedProvider.models as ProviderConfig['models'],
                     ),
                   };
                 })(),

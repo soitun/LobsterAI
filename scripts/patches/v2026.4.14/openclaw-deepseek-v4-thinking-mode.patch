@@ -18,11 +18,11 @@ index 0000000000..2e2c2f7a1b
 +  return typeof modelId === "string" && /^deepseek-v4(?:[-_.]|$)/i.test(modelId.trim());
 +}
 +
-+function resolveDeepSeekThinkingType(thinkingLevel?: ThinkLevel): DeepSeekThinkingType | undefined {
-+  if (!thinkingLevel) {
-+    return undefined;
++function resolveDeepSeekThinkingType(thinkingLevel?: ThinkLevel): DeepSeekThinkingType {
++  if (thinkingLevel === "off") {
++    return "disabled";
 +  }
-+  return thinkingLevel === "off" ? "disabled" : "enabled";
++  return "enabled";
 +}
 +
 +function isDeepSeekV4Model(model: {
@@ -35,11 +35,11 @@ index 0000000000..2e2c2f7a1b
 +
 +/**
 + * DeepSeek V4 defaults to thinking mode. In tool-use turns, DeepSeek requires
-+ * the previous assistant `reasoning_content` to be replayed. OpenClaw's default
-+ * think level is `off`, so make that intent explicit for DeepSeek V4 instead of
-+ * letting the provider enter thinking mode implicitly and then reject tool
-+ * continuations that do not carry reasoning_content. Match by model id so
-+ * custom providers serving DeepSeek V4 get the same fix across API formats.
++ * the previous assistant `reasoning_content` to be replayed. Keep thinking
++ * enabled by default and only send `{ type: "disabled" }` when OpenClaw has
++ * resolved an explicit `thinking=off` intent. Match by model id so custom
++ * providers serving DeepSeek V4 get the same fix across API formats without
++ * relying on provider ids.
 + */
 +export function createDeepSeekThinkingModeWrapper(
 +  baseStreamFn: StreamFn | undefined,
@@ -49,7 +49,7 @@ index 0000000000..2e2c2f7a1b
 +  const thinkingType = resolveDeepSeekThinkingType(thinkingLevel);
 +
 +  return (model, context, options) => {
-+    if (!thinkingType || !isDeepSeekV4Model(model)) {
++    if (!isDeepSeekV4Model(model)) {
 +      return underlying(model, context, options);
 +    }
 +
@@ -94,9 +94,9 @@ index 610b69d834..8d8f3c1a55 100644
    // blocks. Disable thinking unless an earlier wrapper already set it.
    ctx.agent.streamFn = createMinimaxThinkingDisabledWrapper(ctx.agent.streamFn);
  
-+  // DeepSeek V4 defaults to thinking mode. Respect the OpenClaw thinking-level
-+  // intent explicitly so tool-use continuations do not fail DeepSeek's
-+  // reasoning_content replay validation when the user selected thinking=off.
++  // DeepSeek V4 defaults to thinking mode. Keep it enabled by default, while
++  // still making an explicit thinking=off intent visible to DeepSeek so
++  // tool-use continuations follow its reasoning_content replay contract.
 +  ctx.agent.streamFn = createDeepSeekThinkingModeWrapper(
 +    ctx.agent.streamFn,
 +    ctx.thinkingLevel,
@@ -175,7 +175,7 @@ index 9d2dfe0e1a..08e52f2d15 100644
 +    expect(payloads[0]?.thinking).toEqual({ type: "disabled" });
 +  });
 +
-+  it("enables DeepSeek V4 thinking when the OpenClaw thinking level is enabled", () => {
++  it("enables DeepSeek V4 thinking by default", () => {
 +    const payloads: Record<string, unknown>[] = [];
 +    const baseStreamFn: StreamFn = (_model, _context, options) => {
 +      const payload: Record<string, unknown> = {};
@@ -191,7 +191,7 @@ index 9d2dfe0e1a..08e52f2d15 100644
 +      "deepseek",
 +      "deepseek-v4-pro",
 +      undefined,
-+      "medium",
++      undefined,
 +    );
 +
 +    const model = {

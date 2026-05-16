@@ -454,6 +454,36 @@ describe('OpenClawConfigSync runtime config output', () => {
     expect(customSelection.providerConfig.models[0].input).toEqual(['text', 'image']);
   });
 
+  test('marks DeepSeek reasoning models and all Xiaomi models as reasoning-capable', async () => {
+    const { OpenClawApi, ProviderName } = await import('../../shared/providers');
+    const { buildProviderSelection } = await import('./openclawConfigSync');
+
+    const deepseekSelection = buildProviderSelection({
+      apiKey: 'sk-test',
+      baseURL: 'https://api.deepseek.com',
+      modelId: 'deepseek-v4-pro',
+      apiType: 'openai',
+      providerName: ProviderName.DeepSeek,
+      supportsImage: false,
+      modelName: 'DeepSeek V4 Pro',
+    });
+    expect(deepseekSelection.providerConfig.api).toBe(OpenClawApi.OpenAICompletions);
+    expect(deepseekSelection.providerConfig.models[0].reasoning).toBe(true);
+
+    const xiaomiSelection = buildProviderSelection({
+      apiKey: 'sk-test',
+      baseURL: 'https://api.xiaomimimo.com/v1/chat/completions',
+      modelId: 'mimo-any-model',
+      apiType: 'openai',
+      providerName: ProviderName.Xiaomi,
+      supportsImage: false,
+      modelName: 'MiMo Any Model',
+    });
+    expect(xiaomiSelection.providerConfig.baseUrl).toBe('https://api.xiaomimimo.com/v1');
+    expect(xiaomiSelection.providerConfig.api).toBe(OpenClawApi.OpenAICompletions);
+    expect(xiaomiSelection.providerConfig.models[0].reasoning).toBe(true);
+  });
+
   test('writes Telegram streaming in the nested schema expected by current OpenClaw', async () => {
     const { OpenClawConfigSync } = await import('./openclawConfigSync');
 
