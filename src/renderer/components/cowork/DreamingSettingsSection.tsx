@@ -24,6 +24,7 @@ const FREQUENCY_PRESETS = [
 ] as const;
 
 const CUSTOM_VALUE = '__custom__';
+const DREAMING_INSIGHT_ROTATION_MS = 10_000;
 
 const DREAMING_SCENE_STARS = [
   { top: '18%', left: '14%', size: 3, opacity: 0.55, tone: 'soft', delay: '0s' },
@@ -130,6 +131,16 @@ function formatPhaseRunLabel(phase: DreamingPhaseInfo | undefined, fallbackCron:
   return formatCronPreviewTime(phase?.cron || fallbackCron);
 }
 
+function getDreamingInsightMessages(): string[] {
+  const messages = i18nService
+    .t('coworkDreamingInsightMessages')
+    .split(/[,，]/)
+    .map((message) => message.trim())
+    .filter(Boolean);
+
+  return messages.length > 0 ? messages : [i18nService.t('coworkDreamingInsightBrewing')];
+}
+
 function formatCompactDateTime(value: string): string {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) return value;
@@ -192,6 +203,9 @@ function DreamingMascot() {
 }
 
 function SceneTab({ status, fallbackCron }: { status: DreamingStatusData; fallbackCron: string }) {
+  const currentLanguage = i18nService.getLanguage();
+  const insightMessages = getDreamingInsightMessages();
+  const [insightMessageIndex, setInsightMessageIndex] = useState(0);
   const phases = status.phases;
   const phaseEntries: { key: 'light' | 'deep' | 'rem'; labelKey: string }[] = [
     { key: 'light', labelKey: 'coworkDreamingPhaseLight' },
@@ -200,6 +214,21 @@ function SceneTab({ status, fallbackCron }: { status: DreamingStatusData; fallba
   ];
   const nextRun = formatPhaseRunLabel(phases?.light || phases?.deep || phases?.rem, fallbackCron);
   const showNextRun = status.enabled && nextRun !== '—';
+  const insightMessage = insightMessages[insightMessageIndex % insightMessages.length];
+
+  useEffect(() => {
+    setInsightMessageIndex(0);
+  }, [currentLanguage]);
+
+  useEffect(() => {
+    if (!status.enabled || insightMessages.length <= 1) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      setInsightMessageIndex((value) => value + 1);
+    }, DREAMING_INSIGHT_ROTATION_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [status.enabled, insightMessages.length]);
 
   return (
     <div className="dreaming-scene relative h-[320px] overflow-hidden rounded-xl border border-border">
@@ -208,8 +237,8 @@ function SceneTab({ status, fallbackCron }: { status: DreamingStatusData; fallba
       <div className="dreaming-scene-orb-haze absolute right-[13%] top-[14%] h-3 w-3 rounded-full blur-sm" aria-hidden="true" />
 
       {status.enabled && (
-        <div className="dreaming-insight-bubble absolute left-[8%] top-[21%] z-10 rounded-xl border px-4 py-2.5 text-sm font-medium italic backdrop-blur-sm">
-          {i18nService.t('coworkDreamingInsightBrewing')}
+        <div className="dreaming-insight-bubble absolute left-[8%] top-[8%] z-10 max-w-[min(23rem,42%)] rounded-xl border px-4 py-2.5 text-sm font-medium italic leading-5 backdrop-blur-sm [overflow-wrap:anywhere]">
+          {insightMessage}
         </div>
       )}
 
