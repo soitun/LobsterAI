@@ -1159,7 +1159,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                 // Fix corrupted model IDs from previous OAuth mutation bug
                 if (providerKey === 'qwen' && (id === 'vision-model' || id === 'coder-model')) {
                   const defaultModel = defaultConfig.providers?.qwen?.models?.[idx];
-                  id = defaultModel?.id || (model.supportsImage ? 'qwen3.5-plus' : 'qwen3-coder-plus');
+                  id = defaultModel?.id || 'qwen3.5-plus';
                 }
                 return {
                   ...model,
