@@ -2790,7 +2790,7 @@ export class OpenClawConfigSync {
         const identityContent = (agent.identity || '').trim();
         this.syncFileIfChanged(identityPath, identityContent ? `${identityContent}\n` : '');
 
-        // Sync USER.md — shared user profile from Settings > Personalization
+        // Sync USER.md — shared user profile from the main Agent settings
         const userPath = path.join(agentWorkspace, 'USER.md');
         this.syncFileIfChanged(userPath, userContent);
 

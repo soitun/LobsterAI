@@ -1,5 +1,5 @@
 import { EyeIcon, EyeSlashIcon, XCircleIcon as XCircleIconSolid } from '@heroicons/react/20/solid';
-import { ArrowTopRightOnSquareIcon, ChatBubbleLeftIcon, CheckCircleIcon, CpuChipIcon, CubeIcon, EnvelopeIcon, InformationCircleIcon, KeyIcon, ShieldCheckIcon, SignalIcon, SunIcon, UserCircleIcon, XCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ArrowTopRightOnSquareIcon, ChatBubbleLeftIcon, CheckCircleIcon, CpuChipIcon, CubeIcon, EnvelopeIcon, InformationCircleIcon, KeyIcon, ShieldCheckIcon, SignalIcon, SunIcon, XCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import React, { useCallback,useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -41,7 +41,7 @@ import PluginsSettings from './plugins/PluginsSettings';
 import EmailSkillConfig from './skills/EmailSkillConfig';
 import ThemedSelect from './ui/ThemedSelect';
 
-type TabType = 'general' | 'appearance' | 'coworkAgentEngine' | 'model' | 'coworkMemory' | 'coworkAgent' | 'shortcuts' | 'im' | 'email' | 'plugins' | 'about';
+type TabType = 'general' | 'appearance' | 'coworkAgentEngine' | 'model' | 'coworkMemory' | 'coworkDreaming' | 'shortcuts' | 'im' | 'email' | 'plugins' | 'about';
 
 const SettingsSlidersIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg
@@ -58,6 +58,23 @@ const SettingsSlidersIcon: React.FC<{ className?: string }> = ({ className }) =>
     <path d="M19 7h-9" />
     <circle cx="17" cy="17" r="3" />
     <circle cx="7" cy="7" r="3" />
+  </svg>
+);
+
+const DreamingTabIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    width="34"
+    height="34"
+    viewBox="0 0 34 34"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    aria-hidden="true"
+  >
+    <path
+      d="M27.9219 21.9648L29.014 22.4621L29.8552 20.6145L27.831 20.7683L27.9219 21.9648ZM16.0762 5.03516L17.1683 5.53234L18.0095 3.68449L15.9851 3.83862L16.0762 5.03516ZM27.9219 21.9648L26.8297 21.4676C25.1281 25.205 21.3674 27.8 17 27.8V29V30.2C22.3442 30.2 26.9378 27.0221 29.014 22.4621L27.9219 21.9648ZM17 29V27.8C11.0353 27.8 6.2 22.9647 6.2 17H5H3.8C3.8 24.2902 9.70984 30.2 17 30.2V29ZM5 17H6.2C6.2 11.3157 10.5923 6.65614 16.1673 6.23169L16.0762 5.03516L15.9851 3.83862C9.16855 4.35759 3.8 10.0512 3.8 17H5ZM16.0762 5.03516L14.984 4.53798C14.2262 6.20275 13.8 8.052 13.8 10H15H16.2C16.2 8.40537 16.5483 6.8944 17.1683 5.53234L16.0762 5.03516ZM15 10H13.8C13.8 17.2902 19.7098 23.2 27 23.2V22V20.8C21.0353 20.8 16.2 15.9647 16.2 10H15ZM27 22V23.2C27.3413 23.2 27.679 23.1868 28.0128 23.1614L27.9219 21.9648L27.831 20.7683C27.5562 20.7892 27.2791 20.8 27 20.8V22Z"
+      fill="currentColor"
+    />
   </svg>
 );
 
@@ -865,7 +882,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
   const [dreamingFrequency, setDreamingFrequency] = useState<string>(coworkConfig.dreamingFrequency ?? '0 3 * * *');
   const [dreamingModel, setDreamingModel] = useState<string>(coworkConfig.dreamingModel ?? '');
   const [dreamingTimezone, setDreamingTimezone] = useState<string>(coworkConfig.dreamingTimezone ?? '');
-  const [memoryTab, setMemoryTab] = useState<'entries' | 'embedding' | 'dreaming'>('entries');
+  const [memoryTab, setMemoryTab] = useState<'entries' | 'embedding'>('entries');
   const [openClawSessionKeepAlive, setOpenClawSessionKeepAlive] = useState<OpenClawSessionKeepAlive>(
     coworkConfig.openClawSessionPolicy?.keepAlive || OpenClawSessionKeepAliveValues.ThirtyDays,
   );
@@ -876,11 +893,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
   const [coworkMemoryEditingId, setCoworkMemoryEditingId] = useState<string | null>(null);
   const [coworkMemoryDraftText, setCoworkMemoryDraftText] = useState<string>('');
   const [showMemoryModal, setShowMemoryModal] = useState<boolean>(false);
-  const [bootstrapIdentity, setBootstrapIdentity] = useState<string>('');
-  const [bootstrapUser, setBootstrapUser] = useState<string>('');
-  const [bootstrapSoul, setBootstrapSoul] = useState<string>('');
-  const [bootstrapLoaded, setBootstrapLoaded] = useState<boolean>(false);
-  const [bootstrapTab, setBootstrapTab] = useState<'IDENTITY.md' | 'SOUL.md' | 'USER.md'>('IDENTITY.md');
   const [openClawEngineStatus, setOpenClawEngineStatus] = useState<OpenClawEngineStatus | null>(null);
 
   useEffect(() => {
@@ -1715,21 +1727,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
     void loadCoworkMemoryData();
   }, [activeTab, loadCoworkMemoryData]);
 
-  useEffect(() => {
-    if (activeTab !== 'coworkAgent') return;
-    void (async () => {
-      const [identity, user, soul] = await Promise.all([
-        coworkService.readBootstrapFile('IDENTITY.md'),
-        coworkService.readBootstrapFile('USER.md'),
-        coworkService.readBootstrapFile('SOUL.md'),
-      ]);
-      setBootstrapIdentity(identity);
-      setBootstrapUser(user);
-      setBootstrapSoul(soul);
-      setBootstrapLoaded(true);
-    })();
-  }, [activeTab]);
-
   const resetCoworkMemoryEditor = () => {
     setCoworkMemoryEditingId(null);
     setCoworkMemoryDraftText('');
@@ -2010,18 +2007,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
         });
         if (!savedSessionPolicy) {
           throw new Error(i18nService.t('coworkConfigSaveFailed'));
-        }
-      }
-
-      // Save bootstrap files (IDENTITY.md, USER.md, SOUL.md) only if loaded.
-      if (bootstrapLoaded) {
-        const results = await Promise.all([
-          coworkService.writeBootstrapFile('IDENTITY.md', bootstrapIdentity),
-          coworkService.writeBootstrapFile('USER.md', bootstrapUser),
-          coworkService.writeBootstrapFile('SOUL.md', bootstrapSoul),
-        ]);
-        if (results.some(r => !r)) {
-          throw new Error(i18nService.t('coworkBootstrapSaveFailed'));
         }
       }
 
@@ -2674,7 +2659,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
       { key: 'im' as TabType,             label: i18nService.t('imBot'),          icon: <ChatBubbleLeftIcon className="h-5 w-5" /> },
       { key: 'email' as TabType,          label: i18nService.t('emailTab'),       icon: <EnvelopeIcon className="h-5 w-5" /> },
       { key: 'coworkMemory' as TabType,   label: i18nService.t('coworkMemoryTitle'), icon: <BrainIcon className="h-5 w-5" /> },
-      { key: 'coworkAgent' as TabType,    label: i18nService.t('coworkAgentTab'),    icon: <UserCircleIcon className="h-5 w-5" /> },
+      { key: 'coworkDreaming' as TabType, label: i18nService.t('coworkMemoryTabDreaming'), icon: <DreamingTabIcon className="h-5 w-5" /> },
       { key: 'plugins' as TabType,        label: i18nService.t('pluginsTab'),     icon: <PlugIcon className="h-5 w-5" /> },
       { key: 'shortcuts' as TabType,      label: i18nService.t('shortcuts'),      icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5"><rect x="2" y="4" width="20" height="14" rx="2" /><line x1="6" y1="8" x2="8" y2="8" /><line x1="10" y1="8" x2="12" y2="8" /><line x1="14" y1="8" x2="16" y2="8" /><line x1="6" y1="12" x2="8" y2="12" /><line x1="10" y1="12" x2="14" y2="12" /><line x1="16" y1="12" x2="18" y2="12" /><line x1="8" y1="15.5" x2="16" y2="15.5" /></svg> },
       { key: 'about' as TabType,          label: i18nService.t('about'),          icon: <InformationCircleIcon className="h-5 w-5" /> },
@@ -3142,7 +3127,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
         const memoryTabs = [
           { key: 'entries' as const, titleKey: 'coworkMemoryTabEntries' },
           { key: 'embedding' as const, titleKey: 'coworkMemoryTabEmbedding' },
-          { key: 'dreaming' as const, titleKey: 'coworkMemoryTabDreaming' },
         ];
         return (
           <div className="flex flex-col h-full space-y-4">
@@ -3260,22 +3244,26 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
                 />
               )}
 
-              {memoryTab === 'dreaming' && (
-                <DreamingSettingsSection
-                  dreamingEnabled={dreamingEnabled}
-                  dreamingFrequency={dreamingFrequency}
-                  dreamingModel={dreamingModel}
-                  dreamingTimezone={dreamingTimezone}
-                  onDreamingEnabledChange={setDreamingEnabled}
-                  onDreamingFrequencyChange={setDreamingFrequency}
-                  onDreamingModelChange={setDreamingModel}
-                  onDreamingTimezoneChange={setDreamingTimezone}
-                />
-              )}
             </div>
           </div>
         );
       }
+
+      case 'coworkDreaming':
+        return (
+          <div className="min-h-full">
+            <DreamingSettingsSection
+              dreamingEnabled={dreamingEnabled}
+              dreamingFrequency={dreamingFrequency}
+              dreamingModel={dreamingModel}
+              dreamingTimezone={dreamingTimezone}
+              onDreamingEnabledChange={setDreamingEnabled}
+              onDreamingFrequencyChange={setDreamingFrequency}
+              onDreamingModelChange={setDreamingModel}
+              onDreamingTimezoneChange={setDreamingTimezone}
+            />
+          </div>
+        );
 
       case 'model':
         return (
@@ -4477,45 +4465,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
           </div>
         );
 
-      case 'coworkAgent': {
-        const bootstrapTabs = [
-          { key: 'IDENTITY.md' as const, titleKey: 'coworkBootstrapIdentityTitle', hintKey: 'coworkBootstrapIdentityHint', value: bootstrapIdentity, setter: setBootstrapIdentity },
-          { key: 'SOUL.md' as const, titleKey: 'coworkBootstrapSoulTitle', hintKey: 'coworkBootstrapSoulHint', value: bootstrapSoul, setter: setBootstrapSoul },
-          { key: 'USER.md' as const, titleKey: 'coworkBootstrapUserTitle', hintKey: 'coworkBootstrapUserHint', value: bootstrapUser, setter: setBootstrapUser },
-        ];
-        const activeItem = bootstrapTabs.find((t) => t.key === bootstrapTab) ?? bootstrapTabs[0];
-        return (
-          <div className="flex flex-col h-full space-y-4">
-            <div className="flex gap-1 border-b border-border shrink-0">
-              {bootstrapTabs.map((tab) => (
-                <button
-                  type="button"
-                  key={tab.key}
-                  onClick={() => setBootstrapTab(tab.key)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-lg ${
-                    bootstrapTab === tab.key
-                      ? 'bg-primary-muted text-primary border-b-2 border-primary'
-                      : 'text-secondary hover:text-foreground hover:bg-surface-raised'
-                  }`}
-                >
-                  {i18nService.t(tab.titleKey)}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-col flex-1 min-h-0 space-y-2">
-              <p className="text-xs text-secondary shrink-0">{i18nService.t(activeItem.hintKey)}</p>
-              <textarea
-                key={activeItem.key}
-                value={activeItem.value}
-                onChange={(e) => activeItem.setter(e.target.value)}
-                className="w-full flex-1 min-h-[280px] rounded-lg border px-3 py-2 text-sm leading-relaxed border-border bg-surface text-foreground resize-none"
-                placeholder={i18nService.t('coworkBootstrapPlaceholder')}
-              />
-            </div>
-          </div>
-        );
-      }
-
       case 'shortcuts':
         return (
           <div className="space-y-5">
@@ -4785,7 +4734,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, initialTab, notice, notice
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-foreground hover:bg-surface-raised rounded-xl transition-colors text-sm font-medium border border-border active:scale-[0.98]"
+                className="px-4 py-2 rounded-xl transition-colors text-sm font-medium border border-border text-foreground hover:bg-surface-raised active:scale-[0.98]"
               >
                 {i18nService.t('cancel')}
               </button>
