@@ -53,7 +53,7 @@ describe('ProviderRegistry', () => {
 
   test('resolveModelSupportsImage repairs known provider model metadata', () => {
     expect(ProviderRegistry.resolveModelSupportsImage(ProviderName.Qwen, 'qwen3.6-plus', false)).toBe(true);
-    expect(ProviderRegistry.resolveModelSupportsImage(ProviderName.Qwen, 'qwen3-coder-plus', true)).toBe(false);
+    expect(ProviderRegistry.resolveModelSupportsImage(ProviderName.Zhipu, 'glm-5.1', true)).toBe(false);
   });
 
   test('resolveModelSupportsImage upgrades custom providers for globally known vision models', () => {

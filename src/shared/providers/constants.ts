@@ -252,7 +252,6 @@ const PROVIDER_DEFINITIONS = [
     defaultModels: [
       { id: 'qwen3.6-plus', name: 'Qwen3.6 Plus', supportsImage: true },
       { id: 'qwen3.5-plus', name: 'Qwen3.5 Plus', supportsImage: true },
-      { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus', supportsImage: false },
     ],
   },
   {
@@ -276,6 +275,7 @@ const PROVIDER_DEFINITIONS = [
     region: 'china',
     enPriority: 0,
     defaultModels: [
+      { id: 'glm-5.1', name: 'GLM 5.1', supportsImage: false },
       { id: 'glm-5', name: 'GLM 5', supportsImage: false },
       { id: 'glm-4.7', name: 'GLM 4.7', supportsImage: false },
     ],
@@ -338,9 +338,7 @@ const PROVIDER_DEFINITIONS = [
     region: 'china',
     enPriority: 0,
     defaultModels: [
-      { id: 'deepseek-chat', name: 'DeepSeek Chat', supportsImage: false },
       { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner', supportsImage: false },
-      { id: 'deepseek-inhouse-chat', name: 'DeepSeek Chat (\u5b89\u5168)', supportsImage: false },
       {
         id: 'deepseek-inhouse-reasoner',
         name: 'DeepSeek Reasoner (\u5b89\u5168)',
@@ -363,10 +361,11 @@ const PROVIDER_DEFINITIONS = [
     region: 'china',
     enPriority: 0,
     defaultModels: [
-      { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', supportsImage: false },
-      { id: 'deepseek-r1', name: 'DeepSeek R1', supportsImage: false },
-      { id: 'ernie-4.5-8k', name: 'ERNIE 4.5 8K', supportsImage: false },
-      { id: 'ernie-4.5-turbo-8k', name: 'ERNIE 4.5 Turbo', supportsImage: false },
+      { id: 'kimi-k2.5', name: 'Kimi K2.5', supportsImage: false },
+      { id: 'glm-5.1', name: 'GLM 5.1', supportsImage: false },
+      { id: 'minimax-m2.5', name: 'MiniMax M2.5', supportsImage: false },
+      { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', supportsImage: false },
+      { id: 'ernie-4.5-turbo-20260402', name: 'ERNIE 4.5 Turbo', supportsImage: false },
     ],
   },
   {
@@ -474,9 +473,7 @@ const PROVIDER_DEFINITIONS = [
     enPriority: 1,
     defaultModels: [
       { id: 'gpt-5.4', name: 'GPT-5.4', supportsImage: true },
-      { id: 'gpt-5.2', name: 'GPT-5.2', supportsImage: true },
-      { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', supportsImage: true },
-      { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', supportsImage: true },
+      { id: 'gpt-5.5', name: 'GPT-5.5', supportsImage: true },
     ],
   },
   {
@@ -491,9 +488,9 @@ const PROVIDER_DEFINITIONS = [
     region: 'global',
     enPriority: 3,
     defaultModels: [
-      { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', supportsImage: true },
       { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', supportsImage: true },
       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', supportsImage: true },
+      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', supportsImage: true },
     ],
   },
   {
@@ -508,9 +505,9 @@ const PROVIDER_DEFINITIONS = [
     region: 'global',
     enPriority: 2,
     defaultModels: [
-      { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', supportsImage: true },
-      { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', supportsImage: true },
+      { id: 'claude-opus-4-7', name: 'Claude Opus 4.7', supportsImage: true },
       { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', supportsImage: true },
+      { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', supportsImage: true },
     ],
   },
   {
@@ -529,10 +526,10 @@ const PROVIDER_DEFINITIONS = [
     region: 'global',
     enPriority: 0,
     defaultModels: [
-      { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5', supportsImage: true },
-      { id: 'anthropic/claude-opus-4.6', name: 'Claude Opus 4.6', supportsImage: true },
-      { id: 'openai/gpt-5.2-codex', name: 'GPT 5.2 Codex', supportsImage: true },
-      { id: 'google/gemini-3-pro-preview', name: 'Gemini 3 Pro', supportsImage: true },
+      { id: 'anthropic/claude-sonnet-4.6', name: 'Claude Sonnet 4.6', supportsImage: true },
+      { id: 'anthropic/claude-opus-4.7', name: 'Claude Opus 4.7', supportsImage: true },
+      { id: 'openai/gpt-5.5', name: 'GPT 5.5', supportsImage: true },
+      { id: 'google/gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', supportsImage: true },
     ],
   },
 ] as const satisfies readonly ProviderDefInput[];
