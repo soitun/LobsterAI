@@ -143,7 +143,7 @@ KEYFROM=xxx npm run dist:mac:x64
 KEYFROM=xxx npm run dist:mac:arm64
 
 # Windows (.exe NSIS 安装包)
-set KEYFROM=xxx && npm run dist:win
+npx cross-env KEYFROM=xxx npm run dist:win
 ```
 
 ```bash
@@ -155,7 +155,7 @@ KEYFROM=baidu npm run dist:mac:x64
 KEYFROM=baidu npm run dist:mac:arm64
 
 # Windows (.exe NSIS 安装包)
-set KEYFROM=baidu && npm run dist:win
+npx cross-env KEYFROM=baidu npm run dist:win
 ```
 
 
